@@ -1,29 +1,26 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Проверка Supabase</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-</head>
-<body>
-    <button id="btn">Проверить соединение</button>
-    <pre id="out"></pre>
-    <script>
-        const supabase = window.supabase.createClient(
-            'https://ojbebhddhtreghvwkwjk.supabase.co',
-            'sb_publishable_vc_joq6JVnaFzjhjn_W6GQ_S8o4843u'
-        );
-        const out = document.getElementById('out');
-        document.getElementById('btn').onclick = async () => {
-            out.innerText = 'Проверка...';
-            try {
-                // Попробуем просто получить список пользователей (без авторизации)
-                const { data, error } = await supabase.from('users').select('count', { count: 'exact', head: true });
-                if (error) throw error;
-                out.innerText = '✅ Соединение работает! Таблица users доступна.';
-            } catch(e) {
-                out.innerText = '❌ Ошибка: ' + e.message;
-            }
-        };
-    </script>
-</body>
-</html>
+<script>
+  const supabase = window.supabase.createClient(
+    'https://ojbebhddhtreghvwkwjk.supabase.co',
+    'sb_publishable_vc_joq6JVnaFzjhjn_W6GQ_S8o4843u'
+  );
+
+  const out = document.getElementById('out');
+
+  document.getElementById('btn').onclick = async () => {
+    out.innerText = 'Проверка...';
+
+    const res = await supabase
+      .from('users')
+      .select('id', { count: 'exact', head: true }); // важно: count делаем по колонке
+
+    // res = { data, error, count, ...}
+    if (res.error) {
+      out.innerText =
+        '❌ Ошибка:\n' +
+        JSON.stringify(res.error, null, 2);
+      return;
+    }
+
+    out.innerText = '✅ ОК. count=' + res.count;
+  };
+</script>
