@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Голубь | Мессенджер</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: system-ui, sans-serif; background: #f0f2f5; height: 100vh; display: flex; justify-content: center; align-items: center; }
+        .container { width: 100%; max-width: 1400px; height: 100%; background: white; display: flex; flex-direction: column; overflow: hidden; }
+        .auth-screen { position: fixed; inset:0; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        .auth-card { background: white; padding: 2rem; border-radius: 24px; width: 90%; max-width: 400px; }
+        .auth-card h2 { text-align: center; margin-bottom: 1.5rem; }
+        .auth-card input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 12px; }
+        .auth-card button { width: 100%; padding: 12px; background: #667eea; color: white; border: none; border-radius: 12px; margin-top: 12px; cursor: pointer; }
+        .auth-card .toggle { text-align: center; margin-top: 15px; color: #667eea; cursor: pointer; text-decoration: underline; }
+        .error-msg { color: red; font-size: 0.9rem; margin-top: 10px; text-align: center; }
+        .messenger { display: none; flex:1; flex-direction: column; height: 100%; }
+        .header { background: white; padding: 12px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 1.5rem; font-weight: bold; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .user-info { display: flex; align-items: center; gap: 12px; }
+        .avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; cursor: pointer; background: #ddd; }
+        .logout-btn { background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 20px; cursor: pointer; }
+        .main-layout { display: flex; flex:1; overflow: hidden; position: relative; }
+        .sidebar { width: 30%; min-width: 260px; background: white; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; transition: transform 0.2s; }
+        .sidebar-header { padding: 15px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; font-weight: bold; }
+        .contacts-list { flex:1; overflow-y: auto; }
+        .contact-item { display: flex; align-items: center; gap: 12px; padding: 12px 15px; cursor: pointer; border-bottom: 1px solid #f1f5f9; }
+        .contact-item:hover { background: #f1f5f9; }
+        .contact-item.active { background: #eef2ff; }
+        .contact-avatar { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; }
+        .contact-name { font-weight: 600; }
+        .contact-status { font-size: 0.75rem; color: #64748b; }
+        .online { color: #22c55e; }
+        .chat-area { flex:1; display: flex; flex-direction: column; background: #f9fafb; }
+        .chat-header { padding: 15px; background: white; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 12px; }
+        .messages-container { flex:1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+        .message { max-width: 70%; padding: 8px 12px; border-radius: 18px; word-wrap: break-word; }
+        .message.own { align-self: flex-end; background: #667eea; color: white; border-bottom-right-radius: 4px; }
+        .message.other { align-self: flex-start; background: white; border: 1px solid #e2e8f0; border-bottom-left-radius: 4px; }
+        .message-sender { font-size: 0.7rem; font-weight: bold; margin-bottom: 4px; }
+        .message-time { font-size: 0.65rem; text-align: right; margin-top: 4px; opacity: 0.7; }
+        .input-area { padding: 15px; background: white; border-top: 1px solid #e2e8f0; display: flex; gap: 10px; align-items: center; }
+        .input-area input { flex:1; padding: 12px; border: 1px solid #e2e8f0; border-radius: 24px; }
+        .input-area button { background: #667eea; color: white; border: none; padding: 10px 18px; border-radius: 24px; cursor: pointer; }
+        .file-label { background: #e2e8f0; padding: 10px; border-radius: 50%; cursor: pointer; }
+        .mobile-back { display: none; cursor: pointer; font-size: 1.5rem; margin-right: 10px; }
+        @media (max-width: 768px) {
+            .sidebar { position: absolute; left:0; top:0; bottom:0; z-index:20; transform: translateX(-100%); width: 80%; max-width: 280px; }
+            .sidebar.open { transform: translateX(0); }
+            .mobile-back { display: inline-block; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div id="authScreen" class="auth-screen">
+        <div class="auth-card">
+            <h2>🐦 Голубь</h2>
+            <input type="email" id="email" placeholder="Email">
+            <input type="password" id="password" placeholder="Пароль (≥6)">
+            <button id="authBtn">Зарегистрироваться</button>
+            <div class="toggle" id="toggleBtn">Уже есть аккаунт? Войти</div>
+            <div id="errorMsg" class="error-msg"></div>
+        </div>
+    </div>
+    <div id="messenger" class="messenger">
+        <div class="header">
+            <div class="logo">🕊️ Голубь</div>
+            <div class="user-info">
+                <img id="myAvatar" class="avatar" src="https://via.placeholder.com/40">
+                <span id="myName"></span>
+                <button id="logoutBtn" class="logout-btn">Выйти</button>
+            </div>
+        </div>
+        <div class="main-layout">
+            <div id="sidebar" class="sidebar">
+                <div class="sidebar-header">Контакты</div>
+                <div id="contactsList" class="contacts-list">Загрузка...</div>
+            </div>
+            <div class="chat-area">
+                <div class="chat-header">
+                    <span id="mobileBack" class="mobile-back">←</span>
+                    <img id="chatAvatar" class="avatar" style="width:40px;height:40px;">
+                    <div>
+                        <div id="chatName"></div>
+                        <div id="chatStatus" style="font-size:0.75rem;"></div>
+                    </div>
+                </div>
+                <div id="messagesContainer" class="messages-container"></div>
+                <div class="input-area">
+                    <label class="file-label">📎<input type="file" id="fileInput" style="display:none;"></label>
+                    <input type="text" id="messageInput" placeholder="Сообщение...">
+                    <button id="sendBtn">Отправить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    const SUPABASE_URL = 'https://ojbebhddhtreghvwkwjk.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_vc_joq6JVnaFzjhjn_W6GQ_S8o4843u';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let currentUser = null, currentProfile = null, activeChat = null, currentChatId = null, messagesSub = null, onlineInterval = null;
+    let isLogin = false;
+
+    const authScreen = document.getElementById('authScreen');
+    const messengerDiv = document.getElementById('messenger');
+    const emailInp = document.getElementById('email');
+    const passInp = document.getElementById('password');
+    const authBtn = document.getElementById('authBtn');
+    const toggleBtn = document.getElementById('toggleBtn');
+    const errorDiv = document.getElementById('errorMsg');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const contactsDiv = document.getElementById('contactsList');
+    const messagesDiv = document.getElementById('messagesContainer');
+    const messageInp = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const myAvatar = document.getElementById('myAvatar');
+    const myNameSpan = document.getElementById('myName');
+    const chatAvatar = document.getElementById('chatAvatar');
+    const chatNameSpan = document.getElementById('chatName');
+    const chatStatusSpan = document.getElementById('chatStatus');
+    const fileInput = document.getElementById('fileInput');
+    const mobileBack = document.getElementById('mobileBack');
+    const sidebar = document.getElementById('sidebar');
+
+    function showMessage(text, isError = true) { alert(text); console[isError?'error':'log'](text); }
+    function escapeHtml(str) { return str?.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]) || ''; }
+    async function updateOnline(isOnline) { if(currentProfile) await supabase.from('users').update({ is_online: isOnline, last_seen_at: new Date() }).eq('id', currentProfile.id); }
+    async function uploadAvatar(file, userId) { const ext = file.name.split('.').pop(); const path = `${userId}/avatar.${ext}`; await supabase.storage.from('avatars').upload(path, file, { upsert: true }); const { data } = supabase.storage.from('avatars').getPublicUrl(path); return data.publicUrl; }
+
+    async function loadContacts() { if(!currentProfile) return []; const { data } = await supabase.from('users').select('*').neq('id', currentProfile.id); return data || []; }
+    async function renderContacts() {
+        const contacts = await loadContacts();
+        contactsDiv.innerHTML = '';
+        if(!contacts.length) { contactsDiv.innerHTML = '<div style="padding:15px;">Нет других пользователей</div>'; return; }
+        contacts.forEach(c => {
+            const div = document.createElement('div'); div.className = 'contact-item';
+            if(activeChat && activeChat.id === c.id) div.classList.add('active');
+            div.innerHTML = `<img class="contact-avatar" src="${c.avatar_url || 'https://via.placeholder.com/48'}" onerror="this.src='https://via.placeholder.com/48'"><div class="contact-info"><div class="contact-name">${escapeHtml(c.display_name || c.username)}</div><div class="contact-status ${c.is_online ? 'online' : ''}">${c.is_online ? 'В сети' : (c.last_seen_at ? 'был недавно' : 'офлайн')}</div></div>`;
+            div.onclick = () => openChat(c);
+            contactsDiv.appendChild(div);
+        });
+    }
+
+    async function getOrCreateChat(otherId) {
+        const { data: myChats } = await supabase.from('chat_members').select('chat_id').eq('user_id', currentProfile.id);
+        const ids = myChats.map(c => c.chat_id);
+        if(ids.length) {
+            const { data: common } = await supabase.from('chat_members').select('chat_id').in('chat_id', ids).eq('user_id', otherId);
+            if(common?.length) return common[0].chat_id;
+        }
+        const { data: newChat } = await supabase.from('chats').insert({ type: 'private', created_by: currentProfile.id }).select().single();
+        if(newChat) {
+            await supabase.from('chat_members').insert([{ chat_id: newChat.id, user_id: currentProfile.id, role: 'owner' }, { chat_id: newChat.id, user_id: otherId, role: 'member' }]);
+            return newChat.id;
+        }
+        return null;
+    }
+    async function loadMessages(chatId) {
+        const { data } = await supabase.from('messages').select('*, sender:users!sender_id(id, username, display_name)').eq('chat_id', chatId).order('created_at', { ascending: true });
+        if(data) renderMessages(data);
+    }
+    function renderMessages(msgs) {
+        messagesDiv.innerHTML = '';
+        if(!msgs.length) { messagesDiv.innerHTML = '<div style="text-align:center;color:gray;">Нет сообщений</div>'; return; }
+        msgs.forEach(msg => {
+            const isOwn = msg.sender_id === currentProfile.id;
+            const div = document.createElement('div'); div.className = `message ${isOwn ? 'own' : 'other'}`;
+            const sender = msg.sender?.display_name || msg.sender?.username || 'Пользователь';
+            const time = new Date(msg.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+            div.innerHTML = `${!isOwn ? `<div class="message-sender">${escapeHtml(sender)}</div>` : ''}<div>${escapeHtml(msg.content)}</div><div class="message-time">${time}</div>`;
+            messagesDiv.appendChild(div);
+        });
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+    function subscribeToChat(chatId) {
+        if(messagesSub) supabase.removeChannel(messagesSub);
+        messagesSub = supabase.channel(`chat-${chatId}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` }, () => loadMessages(chatId)).subscribe();
+    }
+    async function openChat(user) {
+        activeChat = user;
+        chatNameSpan.innerText = user.display_name || user.username;
+        chatAvatar.src = user.avatar_url || 'https://via.placeholder.com/48';
+        chatStatusSpan.innerText = user.is_online ? 'В сети' : (user.last_seen_at ? 'был недавно' : 'офлайн');
+        const chatId = await getOrCreateChat(user.id);
+        if(chatId) { currentChatId = chatId; await loadMessages(chatId); subscribeToChat(chatId); if(window.innerWidth<=768) sidebar.classList.remove('open'); }
+        renderContacts();
+    }
+    async function sendMessage() {
+        const text = messageInp.value.trim();
+        if(!text || !activeChat || !currentChatId) return;
+        await supabase.from('messages').insert({ chat_id: currentChatId, sender_id: currentProfile.id, content: text, message_type: 'text' });
+        messageInp.value = '';
+        await loadMessages(currentChatId);
+    }
+    async function changeAvatar(file) {
+        try {
+            const url = await uploadAvatar(file, currentProfile.id);
+            await supabase.from('users').update({ avatar_url: url }).eq('id', currentProfile.id);
+            currentProfile.avatar_url = url; myAvatar.src = url; await renderContacts();
+        } catch(e) { showMessage('Ошибка загрузки аватара'); }
+    }
+
+    async function handleAuth() {
+        const email = emailInp.value.trim();
+        const pass = passInp.value;
+        if(!email || !pass) { errorDiv.innerText = 'Заполните поля'; return; }
+        if(pass.length<6) { errorDiv.innerText = 'Пароль ≥6 символов'; return; }
+        errorDiv.innerText = '';
+        authBtn.disabled = true; authBtn.textContent = 'Загрузка...';
+        try {
+            if(isLogin) {
+                const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
+                if(error) throw error;
+            } else {
+                const { error } = await supabase.auth.signUp({ email, password: pass });
+                if(error) throw error;
+                const { error: signErr } = await supabase.auth.signInWithPassword({ email, password: pass });
+                if(signErr) throw signErr;
+            }
+        } catch(err) {
+            errorDiv.innerText = err.message;
+            authBtn.disabled = false; authBtn.textContent = isLogin ? 'Войти' : 'Зарегистрироваться';
+        }
+    }
+
+    async function onAuthStateChange(event, session) {
+        if(event === 'SIGNED_IN' && session?.user) {
+            currentUser = session.user;
+            let { data: profile, error } = await supabase.from('users').select('*').eq('id', currentUser.id).single();
+            if(error || !profile) {
+                const username = currentUser.email.split('@')[0];
+                const { data: newP } = await supabase.from('users').insert({ id: currentUser.id, username, display_name: username }).select().single();
+                profile = newP;
+            }
+            currentProfile = profile;
+            myNameSpan.innerText = profile.display_name || profile.username;
+            myAvatar.src = profile.avatar_url || 'https://via.placeholder.com/40';
+            await updateOnline(true);
+            if(onlineInterval) clearInterval(onlineInterval);
+            onlineInterval = setInterval(() => updateOnline(true), 30000);
+            authScreen.style.display = 'none';
+            messengerDiv.style.display = 'flex';
+            await renderContacts();
+            setInterval(renderContacts, 10000);
+            myAvatar.onclick = () => { const inp = document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.onchange = e => changeAvatar(e.target.files[0]); inp.click(); };
+        } else if(event === 'SIGNED_OUT') {
+            if(onlineInterval) clearInterval(onlineInterval);
+            if(messagesSub) supabase.removeChannel(messagesSub);
+            currentUser = currentProfile = activeChat = null;
+            authScreen.style.display = 'flex';
+            messengerDiv.style.display = 'none';
+        }
+    }
+
+    supabase.auth.onAuthStateChange(onAuthStateChange);
+    supabase.auth.getSession().then(({ data: { session } }) => { if(session) onAuthStateChange('SIGNED_IN', session); else { authScreen.style.display = 'flex'; messengerDiv.style.display = 'none'; } });
+
+    authBtn.onclick = handleAuth;
+    toggleBtn.onclick = () => { isLogin = !isLogin; authBtn.innerText = isLogin ? 'Войти' : 'Зарегистрироваться'; toggleBtn.innerText = isLogin ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти'; errorDiv.innerText = ''; };
+    logoutBtn.onclick = () => supabase.auth.signOut();
+    sendBtn.onclick = sendMessage;
+    messageInp.onkeypress = e => { if(e.key === 'Enter') sendMessage(); };
+    mobileBack.onclick = () => sidebar.classList.toggle('open');
+    fileInput.onchange = async e => {
+        if(!e.target.files.length || !activeChat || !currentChatId) return;
+        const file = e.target.files[0];
+        const name = `${Date.now()}_${file.name}`;
+        await supabase.storage.from('chat_files').upload(name, file);
+        const { data } = supabase.storage.from('chat_files').getPublicUrl(name);
+        await supabase.from('messages').insert({ chat_id: currentChatId, sender_id: currentProfile.id, content: `📎 Файл: ${file.name}`, media_url: data.publicUrl, message_type: 'file' });
+        await loadMessages(currentChatId);
+        fileInput.value = '';
+    };
+</script>
+</body>
+</html>
