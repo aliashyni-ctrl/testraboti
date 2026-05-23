@@ -4,50 +4,75 @@
     <meta charset="UTF-8">
     <title>Голубь - тест регистрации</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: system-ui; margin: 2rem; }
+        input, button { padding: 10px; margin: 5px; width: 250px; }
+        button { background: #667eea; color: white; border: none; cursor: pointer; }
+        #result { margin-top: 20px; padding: 10px; background: #f4f4f4; border-radius: 8px; white-space: pre-wrap; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
 </head>
 <body>
-    <h2>🐦 Голубь</h2>
-    <input id="email" placeholder="Email (например, test@temp.local)" style="width:200px"><br>
-    <input id="pass" type="password" placeholder="Пароль (≥6)" style="width:200px"><br>
-    <button id="regBtn">Зарегистрироваться</button>
-    <div id="result" style="margin-top:20px; font-weight:bold;"></div>
+    <h2>🐦 Голубь — тест регистрации</h2>
+    <input type="text" id="email" placeholder="Email (например, test@temp.local)">
+    <br>
+    <input type="password" id="password" placeholder="Пароль (минимум 6)">
+    <br>
+    <button id="registerBtn">Зарегистрироваться</button>
+    <div id="result">Результат появится здесь...</div>
 
     <script>
-        const supabase = window.supabase.createClient(
-            'https://ojbebhddhtreghvwkwjk.supabase.co',
-            'sb_publishable_vc_joq6JVnaFzjhjn_W6GQ_S8o4843u'
-        );
+        // Ваши данные Supabase
+        const SUPABASE_URL = 'https://ojbebhddhtreghvwkwjk.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_vc_joq6JVnaFzjhjn_W6GQ_S8o4843u';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        document.getElementById('regBtn').onclick = async () => {
-            const email = document.getElementById('email').value.trim();
-            const pass = document.getElementById('pass').value;
-            const resultDiv = document.getElementById('result');
+        const resultDiv = document.getElementById('result');
+        const emailInput = document.getElementById('email');
+        const passInput = document.getElementById('password');
+        const btn = document.getElementById('registerBtn');
 
-            if (!email || !pass) {
-                resultDiv.innerText = '❌ Заполните оба поля';
-                alert('Заполните оба поля');
+        btn.addEventListener('click', async () => {
+            const email = emailInput.value.trim();
+            const password = passInput.value;
+            resultDiv.innerHTML = '⏳ Отправка...';
+            resultDiv.className = '';
+
+            // Проверки
+            if (!email || !password) {
+                resultDiv.innerHTML = '❌ Заполните оба поля';
+                resultDiv.className = 'error';
                 return;
             }
-            if (pass.length < 6) {
-                resultDiv.innerText = '❌ Пароль не менее 6 символов';
-                alert('Пароль не менее 6 символов');
+            if (password.length < 6) {
+                resultDiv.innerHTML = '❌ Пароль должен быть не менее 6 символов';
+                resultDiv.className = 'error';
                 return;
             }
-
-            alert('Отправляю данные в Supabase...'); // первое сообщение
 
             try {
-                const { data, error } = await supabase.auth.signUp({ email, password: pass });
+                const { data, error } = await supabase.auth.signUp({ email, password });
                 if (error) throw error;
-                alert('✅ Данные отправлены! Пользователь создан. ID: ' + data.user.id);
-                resultDiv.innerText = '✅ Данные отправлены!';
-                // автоматический вход
-                await supabase.auth.signInWithPassword({ email, password: pass });
+                if (!data.user) throw new Error('Пользователь не создан');
+                resultDiv.innerHTML = '✅ Регистрация успешна! Пользователь ID: ' + data.user.id;
+                resultDiv.className = 'success';
+                // Пробуем автоматически войти (не критично)
+                await supabase.auth.signInWithPassword({ email, password });
             } catch (err) {
-                alert('❌ Ошибка: ' + err.message);
-                resultDiv.innerText = '❌ Ошибка: ' + err.message;
+                let errorMsg = err.message;
+                if (errorMsg.includes('User already registered')) {
+                    errorMsg = 'Пользователь уже существует. Попробуйте войти.';
+                } else if (errorMsg.includes('fetch')) {
+                    errorMsg = 'Ошибка соединения с Supabase. Проверьте CORS или URL.';
+                }
+                resultDiv.innerHTML = '❌ Ошибка: ' + errorMsg;
+                resultDiv.className = 'error';
             }
-        };
+        });
+    </script>
+</body>
+</html>
     </script>
 </body>
 </html>
