@@ -1,43 +1,72 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Тест Supabase</title>
+    <title>Голубь — финальный тест</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: sans-serif; margin: 2rem; }
+        input, button { padding: 0.5rem; margin: 0.5rem 0; width: 250px; }
+        button { background: #667eea; color: white; border: none; cursor: pointer; }
+        #result { margin-top: 1rem; padding: 1rem; background: #f0f0f0; border-radius: 8px; white-space: pre-wrap; }
+        .success { color: green; background: #e0ffe0; }
+        .error { color: red; background: #ffe0e0; }
+    </style>
 </head>
 <body>
-    <h1>Тест соединения с Supabase</h1>
-    <button id="testBtn">Проверить регистрацию</button>
-    <pre id="log" style="background:#f0f0f0; padding:10px; margin-top:20px;"></pre>
+    <h2>🐦 Голубь — тест регистрации</h2>
+    <input type="text" id="email" placeholder="Логин (можно без @)">
+    <input type="password" id="password" placeholder="Пароль (≥6)">
+    <button id="regBtn">Зарегистрироваться</button>
+    <div id="result">Нажмите кнопку →</div>
 
     <script>
-        const supabase = window.supabase.createClient(
-            'https://ojbebhddhtreghvwkwjk.supabase.co',
-            'sb_publishable_vc_joq6JVnaFzjhjn_W6GQ_S8o4843u'
-        );
+        // Данные вашего Supabase
+        const SUPABASE_URL = 'https://ojbebhddhtreghvwkwjk.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_vc_joq6JVnaFzjhjn_W6GQ_S8o4843u';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        const logDiv = document.getElementById('log');
-        function log(msg) {
-            logDiv.innerText += msg + '\n';
-            console.log(msg);
-        }
+        const resultDiv = document.getElementById('result');
+        const emailInput = document.getElementById('email');
+        const passInput = document.getElementById('password');
+        const regBtn = document.getElementById('regBtn');
 
-        document.getElementById('testBtn').onclick = async () => {
-            logDiv.innerText = '';
-            log('Начинаем тест...');
-            const email = 'test_' + Date.now() + '@temp.local';
-            const password = '12345678';
-            log('Пробуем зарегистрировать: ' + email);
+        regBtn.addEventListener('click', async () => {
+            const rawLogin = emailInput.value.trim();
+            const password = passInput.value;
+            resultDiv.innerHTML = '⏳ Отправляю запрос...';
+            resultDiv.className = '';
+
+            if (!rawLogin || !password) {
+                resultDiv.innerHTML = '❌ Заполните оба поля';
+                resultDiv.className = 'error';
+                return;
+            }
+            if (password.length < 6) {
+                resultDiv.innerHTML = '❌ Пароль не менее 6 символов';
+                resultDiv.className = 'error';
+                return;
+            }
+
+            let email = rawLogin;
+            if (!email.includes('@')) email = email + '@temp.local';
+
             try {
                 const { data, error } = await supabase.auth.signUp({ email, password });
                 if (error) throw error;
-                log('✅ Успех! Пользователь создан: ' + data.user.id);
-                log('Теперь проверьте таблицу users в Supabase, там должна быть запись.');
+                if (!data.user) throw new Error('Не удалось создать пользователя');
+                resultDiv.innerHTML = `✅ Успех! Пользователь создан. ID: ${data.user.id}`;
+                resultDiv.className = 'success';
+                // Автоматический вход
+                await supabase.auth.signInWithPassword({ email, password });
             } catch (err) {
-                log('❌ Ошибка: ' + err.message);
-                if (err.message.includes('fetch')) log('❌ Скорее всего, CORS или сеть. Добавьте URL в настройки Supabase.');
+                let msg = err.message;
+                if (msg.includes('User already registered')) msg = 'Пользователь уже существует. Попробуйте войти.';
+                if (msg.includes('fetch')) msg = 'Ошибка сети: возможно, CORS. Добавьте URL вашего сайта в настройки Supabase (Site URL).';
+                resultDiv.innerHTML = `❌ Ошибка: ${msg}`;
+                resultDiv.className = 'error';
             }
-        };
+        });
     </script>
 </body>
 </html>
