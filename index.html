@@ -17,9 +17,11 @@
         .auth-card input { border: 1px solid #ddd; }
         .auth-card button { background: #667eea; color: white; border: none; cursor: pointer; }
         .auth-card .toggle { text-align: center; margin-top: 15px; color: #667eea; cursor: pointer; text-decoration: underline; }
+        /* Avatar selection section */
+        #avatarSection { text-align: center; margin: 10px 0; }
         .avatar-preview { display: flex; justify-content: center; margin: 10px 0; }
         .avatar-preview img { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 2px solid #667eea; }
-        .file-label { background: #e2e8f0; padding: 8px 12px; border-radius: 20px; cursor: pointer; display: inline-block; margin: 5px 0; font-size: 0.9rem; text-align: center; }
+        .avatar-file-label { background: #e2e8f0; padding: 8px 12px; border-radius: 20px; cursor: pointer; display: inline-block; margin: 5px 0; font-size: 0.9rem; text-align: center; }
         /* Messenger */
         .messenger { display: none; flex:1; flex-direction: column; }
         .header { background: white; padding: 12px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
@@ -65,12 +67,14 @@
             <h2>🐦 Голубь</h2>
             <input type="text" id="regEmail" placeholder="Email или логин">
             <input type="password" id="regPassword" placeholder="Пароль (≥6)">
-            <div class="avatar-preview">
-                <img id="avatarPreview" src="https://via.placeholder.com/80" alt="avatar preview">
+            <div id="avatarSection">
+                <div class="avatar-preview">
+                    <img id="avatarPreview" src="https://via.placeholder.com/80" alt="avatar preview">
+                </div>
+                <label class="avatar-file-label">📷 Выбрать аватар
+                    <input type="file" id="avatarFile" accept="image/*" style="display:none;">
+                </label>
             </div>
-            <label class="file-label">📷 Выбрать аватар
-                <input type="file" id="avatarFile" accept="image/*" style="display:none;">
-            </label>
             <button id="registerBtn">Зарегистрироваться</button>
             <div class="toggle" id="toggleToLogin">Уже есть аккаунт? Войти</div>
             <div id="authError" style="color:red; margin-top:10px; text-align:center;"></div>
@@ -134,6 +138,7 @@
     const authError = document.getElementById('authError');
     const avatarFileInput = document.getElementById('avatarFile');
     const avatarPreview = document.getElementById('avatarPreview');
+    const avatarSection = document.getElementById('avatarSection');
 
     // DOM элементы мессенджера
     const logoutBtn = document.getElementById('logoutBtn');
@@ -301,7 +306,7 @@
             } catch(e) { console.warn('Ошибка загрузки аватара:', e); }
         }
 
-        // 3. Сохраняем профиль в таблицу users (триггер мог создать, но обновим с аватаром)
+        // 3. Сохраняем профиль в таблицу users (upsert для обхода триггера)
         const { error: upsertErr } = await supabase.from('users').upsert({
             id: userId,
             username: username,
@@ -344,6 +349,8 @@
             } else {
                 // Регистрация с аватаром
                 await registerWithAvatar(email, password, avatarFile);
+                // ПОЛЬЗОВАТЕЛЬ СОЗДАН! ПОКАЗЫВАЕМ СООБЩЕНИЕ
+                alert('✅ пользователь создан! Голубь отправлен.');
             }
         } catch (err) {
             authError.innerText = err.message;
@@ -404,9 +411,8 @@
         registerBtn.innerText = isLoginMode ? 'Войти' : 'Зарегистрироваться';
         toggleLink.innerText = isLoginMode ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти';
         authError.innerText = '';
-        // Скрываем/показываем выбор аватара (только при регистрации)
-        const avatarBlock = document.querySelector('.avatar-preview, .file-label');
-        if (avatarBlock) avatarBlock.style.display = isLoginMode ? 'none' : 'block';
+        // Скрываем или показываем блок выбора аватара (только при регистрации)
+        avatarSection.style.display = isLoginMode ? 'none' : 'block';
     }
 
     // Инициализация
