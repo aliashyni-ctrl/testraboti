@@ -17,7 +17,6 @@
             height: 100vh;
             overflow: hidden;
         }
-        /* Основной контейнер */
         .app {
             display: flex;
             height: 100%;
@@ -25,9 +24,7 @@
             margin: 0 auto;
             background: white;
             box-shadow: 0 0 20px rgba(0,0,0,0.05);
-            position: relative;
         }
-        /* Боковая панель (список чатов) */
         .sidebar {
             width: 320px;
             background: #fff;
@@ -143,7 +140,6 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        /* Основная область чата */
         .chat-area {
             flex: 1;
             display: flex;
@@ -263,7 +259,6 @@
             align-items: center;
             justify-content: center;
         }
-        /* Модальное окно поиска по сообщениям */
         .modal {
             display: none;
             position: fixed;
@@ -300,7 +295,6 @@
         .search-result-item:hover {
             background: #f5f7fb;
         }
-        /* Адаптив */
         @media (max-width: 768px) {
             .sidebar {
                 position: absolute;
@@ -325,7 +319,6 @@
         .mobile-back {
             display: none;
         }
-        /* Экран авторизации */
         .auth-screen {
             position: fixed;
             inset: 0;
@@ -389,7 +382,6 @@
 </head>
 <body>
 <div class="app">
-    <!-- Боковая панель -->
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <h2>🐦 Голубь</h2>
@@ -405,8 +397,6 @@
         </div>
         <div class="chats-list" id="chatsList">Загрузка...</div>
     </div>
-
-    <!-- Область чата -->
     <div class="chat-area">
         <div class="chat-header">
             <span class="mobile-back" id="mobileBackBtn">←</span>
@@ -427,8 +417,6 @@
         </div>
     </div>
 </div>
-
-<!-- Модальное окно поиска по сообщениям -->
 <div id="searchModal" class="modal">
     <div class="modal-content">
         <h3>Поиск в чате</h3>
@@ -437,8 +425,6 @@
         <button id="closeModal" style="margin-top:10px; width:100%;">Закрыть</button>
     </div>
 </div>
-
-<!-- Экран авторизации -->
 <div id="authScreen" class="auth-screen">
     <div class="auth-card">
         <h2>🐦 Голубь</h2>
@@ -459,22 +445,21 @@
 </div>
 
 <script>
-    // ========== ЕДИНСТВЕННОЕ ОБЪЯВЛЕНИЕ SUPABASE ==========
-    const SB = window.supabase.createClient(
+    // Единственное объявление клиента Supabase
+    const supabaseClient = window.supabase.createClient(
         'https://ojbebhddhtreghvwkwjk.supabase.co',
         'sb_publishable_vc_joq6JVnaFzjhjn_W6GQ_S8o4843u'
     );
 
-    // ---------- Глобальные переменные ----------
     let currentUser = null;
     let currentProfile = null;
     let activeChatUser = null;
     let currentChatId = null;
     let messagesSubscription = null;
     let onlineInterval = null;
-    let isLoginMode = false; // false=регистрация, true=вход
+    let isLoginMode = false;
 
-    // DOM элементы авторизации
+    // DOM elements
     const authScreen = document.getElementById('authScreen');
     const authEmail = document.getElementById('authEmail');
     const authPassword = document.getElementById('authPassword');
@@ -484,8 +469,6 @@
     const authAvatarFile = document.getElementById('authAvatarFile');
     const authAvatarPreview = document.getElementById('authAvatarPreview');
     const avatarSection = document.getElementById('avatarSection');
-
-    // DOM элементы мессенджера
     const sidebar = document.getElementById('sidebar');
     const chatsListDiv = document.getElementById('chatsList');
     const messagesDiv = document.getElementById('messagesContainer');
@@ -506,31 +489,31 @@
     const searchResultsList = document.getElementById('searchResultsList');
     const closeModal = document.getElementById('closeModal');
 
-    // ---------- Вспомогательные функции ----------
     function showMessage(text) { alert(text); }
     function escapeHtml(str) { return str?.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]) || ''; }
     async function updateOnline(isOnline) {
-        if (currentProfile) await SB.from('users').update({ is_online: isOnline, last_seen_at: new Date() }).eq('id', currentProfile.id);
+        if (currentProfile) {
+            await supabaseClient.from('users').update({ is_online: isOnline, last_seen_at: new Date().toISOString() }).eq('id', currentProfile.id);
+        }
     }
     async function uploadAvatar(file, userId) {
         const ext = file.name.split('.').pop();
         const path = `${userId}/avatar.${ext}`;
-        await SB.storage.from('avatars').upload(path, file, { upsert: true });
-        const { data } = SB.storage.from('avatars').getPublicUrl(path);
+        const { error } = await supabaseClient.storage.from('avatars').upload(path, file, { upsert: true });
+        if (error) throw error;
+        const { data } = supabaseClient.storage.from('avatars').getPublicUrl(path);
         return data.publicUrl;
     }
     async function updateUserAvatar(file) {
         try {
             const url = await uploadAvatar(file, currentProfile.id);
-            await SB.from('users').update({ avatar_url: url }).eq('id', currentProfile.id);
+            await supabaseClient.from('users').update({ avatar_url: url }).eq('id', currentProfile.id);
             currentProfile.avatar_url = url;
             sidebarAvatar.src = url;
             await renderChatsList();
-            if (activeChatUser && activeChatUser.id === currentProfile.id) chatHeaderAvatar.src = url;
         } catch(e) { showMessage('Ошибка загрузки аватара: '+e.message); }
     }
 
-    // Предпросмотр аватара при регистрации
     authAvatarFile.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
@@ -540,11 +523,11 @@
         }
     });
 
-    // ---------- Загрузка списка чатов (все пользователи, кроме себя) ----------
     async function loadChats() {
         if (!currentProfile) return [];
-        const { data } = await SB.from('users').select('*').neq('id', currentProfile.id);
-        return data || [];
+        const { data, error } = await supabaseClient.from('users').select('*').neq('id', currentProfile.id);
+        if (error) return [];
+        return data;
     }
     async function renderChatsList() {
         let contacts = await loadChats();
@@ -557,12 +540,6 @@
             chatsListDiv.innerHTML = '<div style="padding:20px;">Нет контактов</div>';
             return;
         }
-        // Получаем последние сообщения для каждого чата (упрощённо)
-        let lastMessages = {};
-        if (currentProfile) {
-            const { data: msgs } = await SB.from('messages').select('chat_id, content, created_at').order('created_at', { ascending: false }).limit(100);
-            msgs?.forEach(m => { if (!lastMessages[m.chat_id]) lastMessages[m.chat_id] = m.content; });
-        }
         for (const c of contacts) {
             const div = document.createElement('div');
             div.className = 'chat-item';
@@ -571,7 +548,7 @@
                 <img class="chat-avatar" src="${c.avatar_url || 'https://via.placeholder.com/50'}" onerror="this.src='https://via.placeholder.com/50'">
                 <div class="chat-info">
                     <div class="chat-name">${escapeHtml(c.display_name || c.username)}</div>
-                    <div class="chat-last-message">${escapeHtml(lastMessages[c.id] || '')}</div>
+                    <div class="chat-last-message"></div>
                 </div>
             `;
             div.onclick = () => openChat(c);
@@ -579,34 +556,43 @@
         }
     }
 
-    // ---------- Открытие чата ----------
     async function getOrCreatePrivateChat(otherUserId) {
-        const { data: myChats } = await SB.from('chat_members').select('chat_id').eq('user_id', currentProfile.id);
+        const { data: myChats } = await supabaseClient.from('chat_members').select('chat_id').eq('user_id', currentProfile.id);
         const ids = myChats.map(c => c.chat_id);
         if (ids.length) {
-            const { data: common } = await SB.from('chat_members').select('chat_id').in('chat_id', ids).eq('user_id', otherUserId);
-            if (common?.length) return common[0].chat_id;
+            const { data: common } = await supabaseClient.from('chat_members').select('chat_id').in('chat_id', ids).eq('user_id', otherUserId);
+            if (common && common.length) return common[0].chat_id;
         }
-        const { data: newChat } = await SB.from('chats').insert({ type: 'private', created_by: currentProfile.id }).select().single();
-        if (newChat) {
-            await SB.from('chat_members').insert([
-                { chat_id: newChat.id, user_id: currentProfile.id, role: 'owner' },
-                { chat_id: newChat.id, user_id: otherUserId, role: 'member' }
-            ]);
-            return newChat.id;
-        }
-        return null;
+        const { data: newChat, error } = await supabaseClient.from('chats').insert({ type: 'private', created_by: currentProfile.id }).select().single();
+        if (error || !newChat) return null;
+        await supabaseClient.from('chat_members').insert([
+            { chat_id: newChat.id, user_id: currentProfile.id, role: 'owner' },
+            { chat_id: newChat.id, user_id: otherUserId, role: 'member' }
+        ]);
+        return newChat.id;
     }
     async function loadMessages(chatId) {
-        const { data } = await SB.from('messages').select('*, sender:users!sender_id(id, username, display_name)').eq('chat_id', chatId).order('created_at', { ascending: true });
-        if (data) renderMessages(data);
+        const { data, error } = await supabaseClient
+            .from('messages')
+            .select('*, sender:users!sender_id(id, username, display_name)')
+            .eq('chat_id', chatId)
+            .order('created_at', { ascending: true });
+        if (error) {
+            console.error(error);
+            return;
+        }
+        renderMessages(data);
     }
     function renderMessages(msgs) {
         messagesDiv.innerHTML = '';
-        if (!msgs.length) { messagesDiv.innerHTML = '<div style="text-align:center;color:gray;">Нет сообщений</div>'; return; }
+        if (!msgs || msgs.length === 0) {
+            messagesDiv.innerHTML = '<div style="text-align:center;color:gray;">Нет сообщений</div>';
+            return;
+        }
         msgs.forEach(msg => {
             const isOwn = msg.sender_id === currentProfile.id;
-            const div = document.createElement('div'); div.className = `message ${isOwn ? 'own' : 'other'}`;
+            const div = document.createElement('div');
+            div.className = `message ${isOwn ? 'own' : 'other'}`;
             const sender = msg.sender?.display_name || msg.sender?.username || 'Пользователь';
             const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             div.innerHTML = `${!isOwn ? `<div class="message-sender">${escapeHtml(sender)}</div>` : ''}<div>${escapeHtml(msg.content)}</div><div class="message-time">${time}</div>`;
@@ -615,8 +601,20 @@
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
     function subscribeToChat(chatId) {
-        if (messagesSubscription) SB.removeChannel(messagesSubscription);
-        messagesSubscription = SB.channel(`chat-${chatId}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` }, () => loadMessages(chatId)).subscribe();
+        if (messagesSubscription) {
+            supabaseClient.removeChannel(messagesSubscription);
+        }
+        messagesSubscription = supabaseClient
+            .channel(`chat-${chatId}`)
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'messages',
+                filter: `chat_id=eq.${chatId}`
+            }, () => loadMessages(chatId))
+            .subscribe((status, err) => {
+                if (err) console.error('Subscribe error:', err);
+            });
     }
     async function openChat(user) {
         activeChatUser = user;
@@ -631,34 +629,65 @@
             subscribeToChat(chatId);
             if (window.innerWidth <= 768) sidebar.classList.remove('open');
         }
-        renderChatsList();
+        await renderChatsList();
     }
     async function sendMessage() {
         const text = messageInput.value.trim();
         if (!text || !activeChatUser || !currentChatId) return;
-        await SB.from('messages').insert({ chat_id: currentChatId, sender_id: currentProfile.id, content: text, message_type: 'text' });
+        const { error } = await supabaseClient.from('messages').insert({
+            chat_id: currentChatId,
+            sender_id: currentProfile.id,
+            content: text,
+            message_type: 'text'
+        });
+        if (error) {
+            showMessage('Ошибка отправки: ' + error.message);
+            return;
+        }
         messageInput.value = '';
         await loadMessages(currentChatId);
-        renderChatsList(); // обновить последнее сообщение
+        await renderChatsList();
     }
     async function sendFile(file) {
         if (!activeChatUser || !currentChatId) return;
         const name = `${Date.now()}_${file.name}`;
-        const { error: uploadErr } = await SB.storage.from('chat_files').upload(name, file);
-        if (uploadErr) { showMessage('Ошибка загрузки: '+uploadErr.message); return; }
-        const { data } = SB.storage.from('chat_files').getPublicUrl(name);
-        await SB.from('messages').insert({ chat_id: currentChatId, sender_id: currentProfile.id, content: `📎 Файл: ${file.name}`, media_url: data.publicUrl, message_type: 'file' });
+        const { error: uploadErr } = await supabaseClient.storage.from('chat_files').upload(name, file);
+        if (uploadErr) {
+            showMessage('Ошибка загрузки файла: ' + uploadErr.message);
+            return;
+        }
+        const { data } = supabaseClient.storage.from('chat_files').getPublicUrl(name);
+        await supabaseClient.from('messages').insert({
+            chat_id: currentChatId,
+            sender_id: currentProfile.id,
+            content: `📎 Файл: ${file.name}`,
+            media_url: data.publicUrl,
+            message_type: 'file'
+        });
         await loadMessages(currentChatId);
-        renderChatsList();
+        await renderChatsList();
     }
-
-    // ---------- Поиск по сообщениям в чате ----------
     async function searchInChat() {
         const query = searchMessageInput.value.trim().toLowerCase();
-        if (!query || !currentChatId) { searchResultsList.innerHTML = '<div>Введите текст для поиска</div>'; return; }
-        const { data } = await SB.from('messages').select('*, sender:users!sender_id(username, display_name)').eq('chat_id', currentChatId).ilike('content', `%${query}%`).order('created_at', { ascending: false });
+        if (!query || !currentChatId) {
+            searchResultsList.innerHTML = '<div>Введите текст для поиска</div>';
+            return;
+        }
+        const { data, error } = await supabaseClient
+            .from('messages')
+            .select('*, sender:users!sender_id(username, display_name)')
+            .eq('chat_id', currentChatId)
+            .ilike('content', `%${query}%`)
+            .order('created_at', { ascending: false });
+        if (error) {
+            searchResultsList.innerHTML = '<div>Ошибка поиска</div>';
+            return;
+        }
         searchResultsList.innerHTML = '';
-        if (!data || data.length === 0) { searchResultsList.innerHTML = '<div>Ничего не найдено</div>'; return; }
+        if (!data || data.length === 0) {
+            searchResultsList.innerHTML = '<div>Ничего не найдено</div>';
+            return;
+        }
         data.forEach(msg => {
             const div = document.createElement('div');
             div.className = 'search-result-item';
@@ -667,29 +696,32 @@
             div.onclick = () => {
                 searchModal.style.display = 'none';
                 loadMessages(currentChatId);
-                // Прокрутка к сообщению (упрощённо)
             };
             searchResultsList.appendChild(div);
         });
     }
-
-    // ---------- Аутентификация ----------
     async function registerWithAvatar(email, password, avatarFile) {
-        const { data, error } = await SB.auth.signUp({ email, password });
+        const { data, error } = await supabaseClient.auth.signUp({ email, password });
         if (error) throw error;
         if (!data.user) throw new Error('Не удалось создать пользователя');
         const userId = data.user.id;
         const username = email.split('@')[0];
         let avatarUrl = null;
         if (avatarFile) {
-            try { avatarUrl = await uploadAvatar(avatarFile, userId); } catch(e) { console.warn(e); }
+            try {
+                avatarUrl = await uploadAvatar(avatarFile, userId);
+            } catch (e) { console.warn(e); }
         }
-        const { error: upsertErr } = await SB.from('users').upsert({
-            id: userId, username, display_name: username, avatar_url: avatarUrl,
-            created_at: new Date(), updated_at: new Date()
+        const { error: upsertErr } = await supabaseClient.from('users').upsert({
+            id: userId,
+            username,
+            display_name: username,
+            avatar_url: avatarUrl,
+            created_at: new Date(),
+            updated_at: new Date()
         }, { onConflict: 'id' });
         if (upsertErr) throw upsertErr;
-        const { error: signError } = await SB.auth.signInWithPassword({ email, password });
+        const { error: signError } = await supabaseClient.auth.signInWithPassword({ email, password });
         if (signError) throw signError;
         return data.user;
     }
@@ -698,13 +730,20 @@
         const password = authPassword.value;
         const avatarFile = authAvatarFile.files[0];
         authError.innerText = '';
-        if (!rawEmail || !password) { authError.innerText = 'Заполните поля'; return; }
-        if (password.length < 6) { authError.innerText = 'Пароль ≥6 символов'; return; }
+        if (!rawEmail || !password) {
+            authError.innerText = 'Заполните поля';
+            return;
+        }
+        if (password.length < 6) {
+            authError.innerText = 'Пароль не менее 6 символов';
+            return;
+        }
         let email = rawEmail.includes('@') ? rawEmail : rawEmail + '@temp.local';
-        authBtn.disabled = true; authBtn.textContent = 'Загрузка...';
+        authBtn.disabled = true;
+        authBtn.textContent = 'Загрузка...';
         try {
             if (isLoginMode) {
-                await SB.auth.signInWithPassword({ email, password });
+                await supabaseClient.auth.signInWithPassword({ email, password });
             } else {
                 await registerWithAvatar(email, password, avatarFile);
                 alert('✅ пользователь создан! Голубь отправлен.');
@@ -718,10 +757,14 @@
     async function onAuthStateChange(event, session) {
         if (event === 'SIGNED_IN' && session?.user) {
             currentUser = session.user;
-            let { data: profile } = await SB.from('users').select('*').eq('id', currentUser.id).single();
+            let { data: profile } = await supabaseClient.from('users').select('*').eq('id', currentUser.id).single();
             if (!profile) {
                 const username = currentUser.email.split('@')[0];
-                const { data: newProfile } = await SB.from('users').insert({ id: currentUser.id, username, display_name: username }).select().single();
+                const { data: newProfile } = await supabaseClient.from('users').insert({
+                    id: currentUser.id,
+                    username,
+                    display_name: username
+                }).select().single();
                 profile = newProfile;
             }
             currentProfile = profile;
@@ -735,16 +778,23 @@
             setInterval(renderChatsList, 10000);
             sidebarAvatar.onclick = () => {
                 const input = document.createElement('input');
-                input.type = 'file'; input.accept = 'image/*';
+                input.type = 'file';
+                input.accept = 'image/*';
                 input.onchange = (e) => updateUserAvatar(e.target.files[0]);
                 input.click();
             };
         } else if (event === 'SIGNED_OUT') {
             if (onlineInterval) clearInterval(onlineInterval);
-            if (messagesSubscription) SB.removeChannel(messagesSubscription);
-            currentUser = null; currentProfile = null; activeChatUser = null; currentChatId = null;
+            if (messagesSubscription) supabaseClient.removeChannel(messagesSubscription);
+            currentUser = null;
+            currentProfile = null;
+            activeChatUser = null;
+            currentChatId = null;
             authScreen.style.display = 'flex';
-            authEmail.value = ''; authPassword.value = ''; authAvatarFile.value = ''; authAvatarPreview.src = 'https://via.placeholder.com/80';
+            authEmail.value = '';
+            authPassword.value = '';
+            authAvatarFile.value = '';
+            authAvatarPreview.src = 'https://via.placeholder.com/80';
             authError.innerText = '';
         }
     }
@@ -756,11 +806,10 @@
         authError.innerText = '';
     }
 
-    // ---------- Инициализация ----------
     async function init() {
         authBtn.onclick = handleAuth;
         toggleAuthMode.onclick = toggleMode;
-        sidebarLogout.onclick = () => SB.auth.signOut();
+        sidebarLogout.onclick = () => supabaseClient.auth.signOut();
         sendBtn.onclick = sendMessage;
         messageInput.onkeypress = e => { if (e.key === 'Enter') sendMessage(); };
         mobileBackBtn.onclick = () => sidebar.classList.toggle('open');
@@ -770,8 +819,8 @@
         closeModal.onclick = () => searchModal.style.display = 'none';
         searchMessageInput.oninput = () => searchInChat();
         toggleMode();
-        SB.auth.onAuthStateChange(onAuthStateChange);
-        const { data: { session } } = await SB.auth.getSession();
+        supabaseClient.auth.onAuthStateChange(onAuthStateChange);
+        const { data: { session } } = await supabaseClient.auth.getSession();
         if (session) onAuthStateChange('SIGNED_IN', session);
         else authScreen.style.display = 'flex';
     }
