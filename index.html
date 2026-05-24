@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Голубь | Мессенджер с аватарами</title>
+    <title>Голубь | Мессенджер</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
@@ -112,287 +112,283 @@
 </div>
 
 <script>
-    // ========== НАСТРОЙКИ SUPABASE (только один раз) ==========
-    const supabase = window.supabase.createClient(
-        'https://ojbebhddhtreghvwkwjk.supabase.co',
-        'sb_publishable_vc_joq6JVnaFzjhjn_W6GQ_S8o4843u'
-    );
+    (function() {
+        // Единственное объявление supabase
+        const supabase = window.supabase.createClient(
+            'https://ojbebhddhtreghvwkwjk.supabase.co',
+            'sb_publishable_vc_joq6JVnaFzjhjn_W6GQ_S8o4843u'
+        );
 
-    // Глобальные переменные
-    let currentUser = null;
-    let currentProfile = null;
-    let activeChat = null;
-    let currentChatId = null;
-    let messagesSubscription = null;
-    let onlineInterval = null;
-    let isLoginMode = false;
+        let currentUser = null;
+        let currentProfile = null;
+        let activeChat = null;
+        let currentChatId = null;
+        let messagesSubscription = null;
+        let onlineInterval = null;
+        let isLoginMode = false;
 
-    // DOM элементы
-    const authScreen = document.getElementById('authScreen');
-    const messengerDiv = document.getElementById('messenger');
-    const regEmail = document.getElementById('regEmail');
-    const regPassword = document.getElementById('regPassword');
-    const registerBtn = document.getElementById('registerBtn');
-    const toggleLink = document.getElementById('toggleToLogin');
-    const authError = document.getElementById('authError');
-    const avatarFileInput = document.getElementById('avatarFile');
-    const avatarPreview = document.getElementById('avatarPreview');
-    const avatarSection = document.getElementById('avatarSection');
-    const logoutBtn = document.getElementById('logoutBtn');
-    const contactsDiv = document.getElementById('contactsList');
-    const messagesDiv = document.getElementById('messagesContainer');
-    const messageInput = document.getElementById('messageInput');
-    const sendBtn = document.getElementById('sendBtn');
-    const myAvatarImg = document.getElementById('myAvatar');
-    const myNameSpan = document.getElementById('myName');
-    const chatAvatar = document.getElementById('chatAvatar');
-    const chatNameSpan = document.getElementById('chatName');
-    const chatStatusSpan = document.getElementById('chatStatus');
-    const fileInput = document.getElementById('fileInput');
-    const mobileBack = document.getElementById('mobileBack');
-    const sidebar = document.getElementById('sidebar');
+        // DOM элементы
+        const authScreen = document.getElementById('authScreen');
+        const messengerDiv = document.getElementById('messenger');
+        const regEmail = document.getElementById('regEmail');
+        const regPassword = document.getElementById('regPassword');
+        const registerBtn = document.getElementById('registerBtn');
+        const toggleLink = document.getElementById('toggleToLogin');
+        const authError = document.getElementById('authError');
+        const avatarFileInput = document.getElementById('avatarFile');
+        const avatarPreview = document.getElementById('avatarPreview');
+        const avatarSection = document.getElementById('avatarSection');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const contactsDiv = document.getElementById('contactsList');
+        const messagesDiv = document.getElementById('messagesContainer');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const myAvatarImg = document.getElementById('myAvatar');
+        const myNameSpan = document.getElementById('myName');
+        const chatAvatar = document.getElementById('chatAvatar');
+        const chatNameSpan = document.getElementById('chatName');
+        const chatStatusSpan = document.getElementById('chatStatus');
+        const fileInput = document.getElementById('fileInput');
+        const mobileBack = document.getElementById('mobileBack');
+        const sidebar = document.getElementById('sidebar');
 
-    // ---------- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ----------
-    function showMessage(text) { alert(text); }
-    function escapeHtml(str) { return str?.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]) || ''; }
-    async function updateOnline(isOnline) {
-        if(currentProfile) await supabase.from('users').update({ is_online: isOnline, last_seen_at: new Date() }).eq('id', currentProfile.id);
-    }
-
-    async function uploadAvatar(file, userId) {
-        const ext = file.name.split('.').pop();
-        const path = `${userId}/avatar.${ext}`;
-        const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
-        if (error) throw error;
-        const { data } = supabase.storage.from('avatars').getPublicUrl(path);
-        return data.publicUrl;
-    }
-
-    async function updateUserAvatar(file) {
-        try {
-            const url = await uploadAvatar(file, currentProfile.id);
-            await supabase.from('users').update({ avatar_url: url }).eq('id', currentProfile.id);
-            currentProfile.avatar_url = url;
-            myAvatarImg.src = url;
-            await renderContacts();
-        } catch(e) { showMessage('Ошибка загрузки аватара: '+e.message); }
-    }
-
-    avatarFileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (ev) => { avatarPreview.src = ev.target.result; };
-            reader.readAsDataURL(file);
+        function showMessage(text) { alert(text); }
+        function escapeHtml(str) { return str?.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]) || ''; }
+        async function updateOnline(isOnline) {
+            if(currentProfile) await supabase.from('users').update({ is_online: isOnline, last_seen_at: new Date() }).eq('id', currentProfile.id);
         }
-    });
 
-    // ---------- КОНТАКТЫ ----------
-    async function loadContacts() {
-        if(!currentProfile) return [];
-        const { data, error } = await supabase.from('users').select('*').neq('id', currentProfile.id);
-        if(error) return [];
-        return data;
-    }
-
-    async function renderContacts() {
-        const contacts = await loadContacts();
-        contactsDiv.innerHTML = '';
-        if(!contacts.length) { contactsDiv.innerHTML = '<div style="padding:15px;">Нет других пользователей</div>'; return; }
-        contacts.forEach(c => {
-            const div = document.createElement('div'); div.className = 'contact-item';
-            if(activeChat && activeChat.id === c.id) div.classList.add('active');
-            div.innerHTML = `
-                <img class="contact-avatar" src="${c.avatar_url || 'https://via.placeholder.com/48'}" onerror="this.src='https://via.placeholder.com/48'">
-                <div class="contact-info">
-                    <div class="contact-name">${escapeHtml(c.display_name || c.username)}</div>
-                    <div class="contact-status ${c.is_online ? 'online' : ''}">${c.is_online ? 'В сети' : (c.last_seen_at ? 'был недавно' : 'офлайн')}</div>
-                </div>
-            `;
-            div.onclick = () => openChat(c);
-            contactsDiv.appendChild(div);
-        });
-    }
-
-    // ---------- ЧАТЫ ----------
-    async function getOrCreatePrivateChat(otherUserId) {
-        const { data: myChats } = await supabase.from('chat_members').select('chat_id').eq('user_id', currentProfile.id);
-        const ids = myChats.map(c => c.chat_id);
-        if(ids.length) {
-            const { data: common } = await supabase.from('chat_members').select('chat_id').in('chat_id', ids).eq('user_id', otherUserId);
-            if(common?.length) return common[0].chat_id;
+        async function uploadAvatar(file, userId) {
+            const ext = file.name.split('.').pop();
+            const path = `${userId}/avatar.${ext}`;
+            const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
+            if (error) throw error;
+            const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+            return data.publicUrl;
         }
-        const { data: newChat, error } = await supabase.from('chats').insert({ type: 'private', created_by: currentProfile.id }).select().single();
-        if(error) return null;
-        await supabase.from('chat_members').insert([
-            { chat_id: newChat.id, user_id: currentProfile.id, role: 'owner' },
-            { chat_id: newChat.id, user_id: otherUserId, role: 'member' }
-        ]);
-        return newChat.id;
-    }
 
-    async function loadMessages(chatId) {
-        const { data } = await supabase.from('messages').select('*, sender:users!sender_id(id, username, display_name)').eq('chat_id', chatId).order('created_at', { ascending: true });
-        if(data) renderMessages(data);
-    }
-
-    function renderMessages(msgs) {
-        messagesDiv.innerHTML = '';
-        if(!msgs.length) { messagesDiv.innerHTML = '<div style="text-align:center;color:gray;">Нет сообщений</div>'; return; }
-        msgs.forEach(msg => {
-            const isOwn = msg.sender_id === currentProfile.id;
-            const div = document.createElement('div'); div.className = `message ${isOwn ? 'own' : 'other'}`;
-            const sender = msg.sender?.display_name || msg.sender?.username || 'Пользователь';
-            const time = new Date(msg.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-            div.innerHTML = `${!isOwn ? `<div class="message-sender">${escapeHtml(sender)}</div>` : ''}<div>${escapeHtml(msg.content)}</div><div class="message-time">${time}</div>`;
-            messagesDiv.appendChild(div);
-        });
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    }
-
-    function subscribeToChat(chatId) {
-        if(messagesSubscription) supabase.removeChannel(messagesSubscription);
-        messagesSubscription = supabase.channel(`chat-${chatId}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` }, () => loadMessages(chatId)).subscribe();
-    }
-
-    async function openChat(user) {
-        activeChat = user;
-        chatNameSpan.innerText = user.display_name || user.username;
-        chatAvatar.src = user.avatar_url || 'https://via.placeholder.com/48';
-        chatStatusSpan.innerText = user.is_online ? 'В сети' : (user.last_seen_at ? 'был недавно' : 'офлайн');
-        const chatId = await getOrCreatePrivateChat(user.id);
-        if(chatId) { currentChatId = chatId; await loadMessages(chatId); subscribeToChat(chatId); if(window.innerWidth<=768) sidebar.classList.remove('open'); }
-        renderContacts();
-    }
-
-    async function sendMessage() {
-        const text = messageInput.value.trim();
-        if(!text || !activeChat || !currentChatId) return;
-        await supabase.from('messages').insert({ chat_id: currentChatId, sender_id: currentProfile.id, content: text, message_type: 'text' });
-        messageInput.value = '';
-        await loadMessages(currentChatId);
-    }
-
-    async function sendFile(file) {
-        if(!activeChat || !currentChatId) return;
-        const name = `${Date.now()}_${file.name}`;
-        const { error: uploadErr } = await supabase.storage.from('chat_files').upload(name, file);
-        if(uploadErr) { showMessage('Ошибка загрузки файла: '+uploadErr.message); return; }
-        const { data } = supabase.storage.from('chat_files').getPublicUrl(name);
-        await supabase.from('messages').insert({ chat_id: currentChatId, sender_id: currentProfile.id, content: `📎 Файл: ${file.name}`, media_url: data.publicUrl, message_type: 'file' });
-        await loadMessages(currentChatId);
-    }
-
-    // ---------- РЕГИСТРАЦИЯ С АВАТАРОМ ----------
-    async function registerWithAvatar(email, password, avatarFile) {
-        const { data, error } = await supabase.auth.signUp({ email, password });
-        if (error) throw error;
-        if (!data.user) throw new Error('Не удалось создать пользователя');
-        const userId = data.user.id;
-        const username = email.split('@')[0];
-        let avatarUrl = null;
-        if (avatarFile) {
-            try { avatarUrl = await uploadAvatar(avatarFile, userId); } catch(e) { console.warn(e); }
+        async function updateUserAvatar(file) {
+            try {
+                const url = await uploadAvatar(file, currentProfile.id);
+                await supabase.from('users').update({ avatar_url: url }).eq('id', currentProfile.id);
+                currentProfile.avatar_url = url;
+                myAvatarImg.src = url;
+                await renderContacts();
+            } catch(e) { showMessage('Ошибка загрузки аватара: '+e.message); }
         }
-        const { error: upsertErr } = await supabase.from('users').upsert({
-            id: userId, username, display_name: username, avatar_url: avatarUrl,
-            created_at: new Date(), updated_at: new Date()
-        }, { onConflict: 'id' });
-        if (upsertErr) throw upsertErr;
-        const { error: signError } = await supabase.auth.signInWithPassword({ email, password });
-        if (signError) throw signError;
-        return data.user;
-    }
 
-    async function handleAuth() {
-        let rawEmail = regEmail.value.trim();
-        const password = regPassword.value;
-        const avatarFile = avatarFileInput.files[0];
-        authError.innerText = '';
-        if (!rawEmail || !password) { authError.innerText = 'Заполните все поля'; return; }
-        if (password.length < 6) { authError.innerText = 'Пароль не менее 6 символов'; return; }
-        let email = rawEmail.includes('@') ? rawEmail : rawEmail + '@temp.local';
-        registerBtn.disabled = true;
-        registerBtn.textContent = 'Загрузка...';
-        try {
-            if (isLoginMode) {
-                await supabase.auth.signInWithPassword({ email, password });
-            } else {
-                await registerWithAvatar(email, password, avatarFile);
-                alert('✅ пользователь создан! Голубь отправлен.');
+        avatarFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (ev) => { avatarPreview.src = ev.target.result; };
+                reader.readAsDataURL(file);
             }
-        } catch (err) {
-            authError.innerText = err.message;
-            registerBtn.disabled = false;
-            registerBtn.textContent = isLoginMode ? 'Войти' : 'Зарегистрироваться';
-        }
-    }
+        });
 
-    // ---------- АУТЕНТИФИКАЦИЯ ----------
-    async function onAuthStateChange(event, session) {
-        if (event === 'SIGNED_IN' && session?.user) {
-            currentUser = session.user;
-            let { data: profile, error } = await supabase.from('users').select('*').eq('id', currentUser.id).single();
-            if (error || !profile) {
-                const username = currentUser.email.split('@')[0];
-                const { data: newProfile, error: insErr } = await supabase.from('users').insert({ id: currentUser.id, username, display_name: username }).select().single();
-                if (insErr) throw new Error('Ошибка создания профиля');
-                profile = newProfile;
+        async function loadContacts() {
+            if(!currentProfile) return [];
+            const { data, error } = await supabase.from('users').select('*').neq('id', currentProfile.id);
+            if(error) return [];
+            return data;
+        }
+
+        async function renderContacts() {
+            const contacts = await loadContacts();
+            contactsDiv.innerHTML = '';
+            if(!contacts.length) { contactsDiv.innerHTML = '<div style="padding:15px;">Нет других пользователей</div>'; return; }
+            contacts.forEach(c => {
+                const div = document.createElement('div'); div.className = 'contact-item';
+                if(activeChat && activeChat.id === c.id) div.classList.add('active');
+                div.innerHTML = `
+                    <img class="contact-avatar" src="${c.avatar_url || 'https://via.placeholder.com/48'}" onerror="this.src='https://via.placeholder.com/48'">
+                    <div class="contact-info">
+                        <div class="contact-name">${escapeHtml(c.display_name || c.username)}</div>
+                        <div class="contact-status ${c.is_online ? 'online' : ''}">${c.is_online ? 'В сети' : (c.last_seen_at ? 'был недавно' : 'офлайн')}</div>
+                    </div>
+                `;
+                div.onclick = () => openChat(c);
+                contactsDiv.appendChild(div);
+            });
+        }
+
+        async function getOrCreatePrivateChat(otherUserId) {
+            const { data: myChats } = await supabase.from('chat_members').select('chat_id').eq('user_id', currentProfile.id);
+            const ids = myChats.map(c => c.chat_id);
+            if(ids.length) {
+                const { data: common } = await supabase.from('chat_members').select('chat_id').in('chat_id', ids).eq('user_id', otherUserId);
+                if(common?.length) return common[0].chat_id;
             }
-            currentProfile = profile;
-            myNameSpan.innerText = profile.display_name || profile.username;
-            myAvatarImg.src = profile.avatar_url || 'https://via.placeholder.com/40';
-            await updateOnline(true);
-            if (onlineInterval) clearInterval(onlineInterval);
-            onlineInterval = setInterval(() => updateOnline(true), 30000);
-            authScreen.style.display = 'none';
-            messengerDiv.style.display = 'flex';
-            await renderContacts();
-            setInterval(renderContacts, 10000);
-            myAvatarImg.onclick = () => {
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = 'image/*';
-                input.onchange = (e) => updateUserAvatar(e.target.files[0]);
-                input.click();
-            };
-        } else if (event === 'SIGNED_OUT') {
-            if (onlineInterval) clearInterval(onlineInterval);
-            if (messagesSubscription) supabase.removeChannel(messagesSubscription);
-            currentUser = null; currentProfile = null; activeChat = null; currentChatId = null;
-            authScreen.style.display = 'flex';
-            messengerDiv.style.display = 'none';
-            regEmail.value = '';
-            regPassword.value = '';
-            avatarFileInput.value = '';
-            avatarPreview.src = 'https://via.placeholder.com/80';
+            const { data: newChat, error } = await supabase.from('chats').insert({ type: 'private', created_by: currentProfile.id }).select().single();
+            if(error) return null;
+            await supabase.from('chat_members').insert([
+                { chat_id: newChat.id, user_id: currentProfile.id, role: 'owner' },
+                { chat_id: newChat.id, user_id: otherUserId, role: 'member' }
+            ]);
+            return newChat.id;
+        }
+
+        async function loadMessages(chatId) {
+            const { data } = await supabase.from('messages').select('*, sender:users!sender_id(id, username, display_name)').eq('chat_id', chatId).order('created_at', { ascending: true });
+            if(data) renderMessages(data);
+        }
+
+        function renderMessages(msgs) {
+            messagesDiv.innerHTML = '';
+            if(!msgs.length) { messagesDiv.innerHTML = '<div style="text-align:center;color:gray;">Нет сообщений</div>'; return; }
+            msgs.forEach(msg => {
+                const isOwn = msg.sender_id === currentProfile.id;
+                const div = document.createElement('div'); div.className = `message ${isOwn ? 'own' : 'other'}`;
+                const sender = msg.sender?.display_name || msg.sender?.username || 'Пользователь';
+                const time = new Date(msg.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+                div.innerHTML = `${!isOwn ? `<div class="message-sender">${escapeHtml(sender)}</div>` : ''}<div>${escapeHtml(msg.content)}</div><div class="message-time">${time}</div>`;
+                messagesDiv.appendChild(div);
+            });
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function subscribeToChat(chatId) {
+            if(messagesSubscription) supabase.removeChannel(messagesSubscription);
+            messagesSubscription = supabase.channel(`chat-${chatId}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` }, () => loadMessages(chatId)).subscribe();
+        }
+
+        async function openChat(user) {
+            activeChat = user;
+            chatNameSpan.innerText = user.display_name || user.username;
+            chatAvatar.src = user.avatar_url || 'https://via.placeholder.com/48';
+            chatStatusSpan.innerText = user.is_online ? 'В сети' : (user.last_seen_at ? 'был недавно' : 'офлайн');
+            const chatId = await getOrCreatePrivateChat(user.id);
+            if(chatId) { currentChatId = chatId; await loadMessages(chatId); subscribeToChat(chatId); if(window.innerWidth<=768) sidebar.classList.remove('open'); }
+            renderContacts();
+        }
+
+        async function sendMessage() {
+            const text = messageInput.value.trim();
+            if(!text || !activeChat || !currentChatId) return;
+            await supabase.from('messages').insert({ chat_id: currentChatId, sender_id: currentProfile.id, content: text, message_type: 'text' });
+            messageInput.value = '';
+            await loadMessages(currentChatId);
+        }
+
+        async function sendFile(file) {
+            if(!activeChat || !currentChatId) return;
+            const name = `${Date.now()}_${file.name}`;
+            const { error: uploadErr } = await supabase.storage.from('chat_files').upload(name, file);
+            if(uploadErr) { showMessage('Ошибка загрузки файла: '+uploadErr.message); return; }
+            const { data } = supabase.storage.from('chat_files').getPublicUrl(name);
+            await supabase.from('messages').insert({ chat_id: currentChatId, sender_id: currentProfile.id, content: `📎 Файл: ${file.name}`, media_url: data.publicUrl, message_type: 'file' });
+            await loadMessages(currentChatId);
+        }
+
+        async function registerWithAvatar(email, password, avatarFile) {
+            const { data, error } = await supabase.auth.signUp({ email, password });
+            if (error) throw error;
+            if (!data.user) throw new Error('Не удалось создать пользователя');
+            const userId = data.user.id;
+            const username = email.split('@')[0];
+            let avatarUrl = null;
+            if (avatarFile) {
+                try { avatarUrl = await uploadAvatar(avatarFile, userId); } catch(e) { console.warn(e); }
+            }
+            const { error: upsertErr } = await supabase.from('users').upsert({
+                id: userId, username, display_name: username, avatar_url: avatarUrl,
+                created_at: new Date(), updated_at: new Date()
+            }, { onConflict: 'id' });
+            if (upsertErr) throw upsertErr;
+            const { error: signError } = await supabase.auth.signInWithPassword({ email, password });
+            if (signError) throw signError;
+            return data.user;
+        }
+
+        async function handleAuth() {
+            let rawEmail = regEmail.value.trim();
+            const password = regPassword.value;
+            const avatarFile = avatarFileInput.files[0];
             authError.innerText = '';
+            if (!rawEmail || !password) { authError.innerText = 'Заполните все поля'; return; }
+            if (password.length < 6) { authError.innerText = 'Пароль не менее 6 символов'; return; }
+            let email = rawEmail.includes('@') ? rawEmail : rawEmail + '@temp.local';
+            registerBtn.disabled = true;
+            registerBtn.textContent = 'Загрузка...';
+            try {
+                if (isLoginMode) {
+                    await supabase.auth.signInWithPassword({ email, password });
+                } else {
+                    await registerWithAvatar(email, password, avatarFile);
+                    alert('✅ пользователь создан! Голубь отправлен.');
+                }
+            } catch (err) {
+                authError.innerText = err.message;
+                registerBtn.disabled = false;
+                registerBtn.textContent = isLoginMode ? 'Войти' : 'Зарегистрироваться';
+            }
         }
-    }
 
-    function toggleMode() {
-        isLoginMode = !isLoginMode;
-        registerBtn.innerText = isLoginMode ? 'Войти' : 'Зарегистрироваться';
-        toggleLink.innerText = isLoginMode ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти';
-        authError.innerText = '';
-        avatarSection.style.display = isLoginMode ? 'none' : 'block';
-    }
+        async function onAuthStateChange(event, session) {
+            if (event === 'SIGNED_IN' && session?.user) {
+                currentUser = session.user;
+                let { data: profile, error } = await supabase.from('users').select('*').eq('id', currentUser.id).single();
+                if (error || !profile) {
+                    const username = currentUser.email.split('@')[0];
+                    const { data: newProfile, error: insErr } = await supabase.from('users').insert({ id: currentUser.id, username, display_name: username }).select().single();
+                    if (insErr) throw new Error('Ошибка создания профиля');
+                    profile = newProfile;
+                }
+                currentProfile = profile;
+                myNameSpan.innerText = profile.display_name || profile.username;
+                myAvatarImg.src = profile.avatar_url || 'https://via.placeholder.com/40';
+                await updateOnline(true);
+                if (onlineInterval) clearInterval(onlineInterval);
+                onlineInterval = setInterval(() => updateOnline(true), 30000);
+                authScreen.style.display = 'none';
+                messengerDiv.style.display = 'flex';
+                await renderContacts();
+                setInterval(renderContacts, 10000);
+                myAvatarImg.onclick = () => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.onchange = (e) => updateUserAvatar(e.target.files[0]);
+                    input.click();
+                };
+            } else if (event === 'SIGNED_OUT') {
+                if (onlineInterval) clearInterval(onlineInterval);
+                if (messagesSubscription) supabase.removeChannel(messagesSubscription);
+                currentUser = null; currentProfile = null; activeChat = null; currentChatId = null;
+                authScreen.style.display = 'flex';
+                messengerDiv.style.display = 'none';
+                regEmail.value = '';
+                regPassword.value = '';
+                avatarFileInput.value = '';
+                avatarPreview.src = 'https://via.placeholder.com/80';
+                authError.innerText = '';
+            }
+        }
 
-    async function init() {
-        registerBtn.onclick = handleAuth;
-        toggleLink.onclick = toggleMode;
-        logoutBtn.onclick = () => supabase.auth.signOut();
-        sendBtn.onclick = sendMessage;
-        messageInput.onkeypress = e => { if (e.key === 'Enter') sendMessage(); };
-        mobileBack.onclick = () => sidebar.classList.toggle('open');
-        fileInput.onchange = async e => { if (e.target.files.length) await sendFile(e.target.files[0]); fileInput.value = ''; };
-        toggleMode();
-        supabase.auth.onAuthStateChange(onAuthStateChange);
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) onAuthStateChange('SIGNED_IN', session);
-        else { authScreen.style.display = 'flex'; messengerDiv.style.display = 'none'; }
-    }
-    init();
+        function toggleMode() {
+            isLoginMode = !isLoginMode;
+            registerBtn.innerText = isLoginMode ? 'Войти' : 'Зарегистрироваться';
+            toggleLink.innerText = isLoginMode ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти';
+            authError.innerText = '';
+            avatarSection.style.display = isLoginMode ? 'none' : 'block';
+        }
+
+        async function init() {
+            registerBtn.onclick = handleAuth;
+            toggleLink.onclick = toggleMode;
+            logoutBtn.onclick = () => supabase.auth.signOut();
+            sendBtn.onclick = sendMessage;
+            messageInput.onkeypress = e => { if (e.key === 'Enter') sendMessage(); };
+            mobileBack.onclick = () => sidebar.classList.toggle('open');
+            fileInput.onchange = async e => { if (e.target.files.length) await sendFile(e.target.files[0]); fileInput.value = ''; };
+            toggleMode();
+            supabase.auth.onAuthStateChange(onAuthStateChange);
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) onAuthStateChange('SIGNED_IN', session);
+            else { authScreen.style.display = 'flex'; messengerDiv.style.display = 'none'; }
+        }
+        init();
+    })();
 </script>
 </body>
 </html>
