@@ -9,7 +9,6 @@
         * { margin:0; padding:0; box-sizing:border-box; }
         body { font-family: system-ui, sans-serif; background: #f0f2f5; height: 100vh; display: flex; justify-content: center; align-items: center; }
         .app { width: 100%; max-width: 1400px; height: 100%; background: white; display: flex; flex-direction: column; overflow: hidden; }
-        /* Auth screen */
         .auth-screen { position: fixed; inset:0; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; justify-content: center; align-items: center; z-index: 1000; }
         .auth-card { background: white; padding: 2rem; border-radius: 24px; width: 90%; max-width: 400px; max-height: 90vh; overflow-y: auto; }
         .auth-card h2 { text-align: center; margin-bottom: 1rem; }
@@ -17,12 +16,10 @@
         .auth-card input { border: 1px solid #ddd; }
         .auth-card button { background: #667eea; color: white; border: none; cursor: pointer; }
         .auth-card .toggle { text-align: center; margin-top: 15px; color: #667eea; cursor: pointer; text-decoration: underline; }
-        /* Avatar selection section */
         #avatarSection { text-align: center; margin: 10px 0; }
         .avatar-preview { display: flex; justify-content: center; margin: 10px 0; }
         .avatar-preview img { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 2px solid #667eea; }
-        .avatar-file-label { background: #e2e8f0; padding: 8px 12px; border-radius: 20px; cursor: pointer; display: inline-block; margin: 5px 0; font-size: 0.9rem; text-align: center; }
-        /* Messenger */
+        .avatar-file-label { background: #e2e8f0; padding: 8px 12px; border-radius: 20px; cursor: pointer; display: inline-block; margin: 5px 0; font-size: 0.9rem; }
         .messenger { display: none; flex:1; flex-direction: column; }
         .header { background: white; padding: 12px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
         .logo { font-size: 1.5rem; font-weight: bold; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; background-clip: text; color: transparent; }
@@ -115,20 +112,22 @@
 </div>
 
 <script>
-    // ------------------- НАСТРОЙКИ SUPABASE -------------------
-    const SUPABASE_URL = 'https://ojbebhddhtreghvwkwjk.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_vc_joq6JVnaFzjhjn_W6GQ_S8o4843u';
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // ========== НАСТРОЙКИ SUPABASE (только один раз) ==========
+    const supabase = window.supabase.createClient(
+        'https://ojbebhddhtreghvwkwjk.supabase.co',
+        'sb_publishable_vc_joq6JVnaFzjhjn_W6GQ_S8o4843u'
+    );
 
+    // Глобальные переменные
     let currentUser = null;
     let currentProfile = null;
     let activeChat = null;
     let currentChatId = null;
     let messagesSubscription = null;
     let onlineInterval = null;
-    let isLoginMode = false; // false = регистрация, true = вход
+    let isLoginMode = false;
 
-    // DOM элементы авторизации
+    // DOM элементы
     const authScreen = document.getElementById('authScreen');
     const messengerDiv = document.getElementById('messenger');
     const regEmail = document.getElementById('regEmail');
@@ -139,8 +138,6 @@
     const avatarFileInput = document.getElementById('avatarFile');
     const avatarPreview = document.getElementById('avatarPreview');
     const avatarSection = document.getElementById('avatarSection');
-
-    // DOM элементы мессенджера
     const logoutBtn = document.getElementById('logoutBtn');
     const contactsDiv = document.getElementById('contactsList');
     const messagesDiv = document.getElementById('messagesContainer');
@@ -155,14 +152,13 @@
     const mobileBack = document.getElementById('mobileBack');
     const sidebar = document.getElementById('sidebar');
 
-    // ------------------- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ -------------------
+    // ---------- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ----------
     function showMessage(text) { alert(text); }
     function escapeHtml(str) { return str?.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]) || ''; }
     async function updateOnline(isOnline) {
         if(currentProfile) await supabase.from('users').update({ is_online: isOnline, last_seen_at: new Date() }).eq('id', currentProfile.id);
     }
 
-    // Загрузка аватара в Storage и возврат public URL
     async function uploadAvatar(file, userId) {
         const ext = file.name.split('.').pop();
         const path = `${userId}/avatar.${ext}`;
@@ -172,7 +168,6 @@
         return data.publicUrl;
     }
 
-    // Обновить аватар текущего пользователя
     async function updateUserAvatar(file) {
         try {
             const url = await uploadAvatar(file, currentProfile.id);
@@ -183,7 +178,6 @@
         } catch(e) { showMessage('Ошибка загрузки аватара: '+e.message); }
     }
 
-    // Предпросмотр аватара при выборе файла
     avatarFileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
@@ -193,7 +187,7 @@
         }
     });
 
-    // ------------------- ЗАГРУЗКА КОНТАКТОВ -------------------
+    // ---------- КОНТАКТЫ ----------
     async function loadContacts() {
         if(!currentProfile) return [];
         const { data, error } = await supabase.from('users').select('*').neq('id', currentProfile.id);
@@ -220,7 +214,7 @@
         });
     }
 
-    // ------------------- ЧАТЫ И СООБЩЕНИЯ -------------------
+    // ---------- ЧАТЫ ----------
     async function getOrCreatePrivateChat(otherUserId) {
         const { data: myChats } = await supabase.from('chat_members').select('chat_id').eq('user_id', currentProfile.id);
         const ids = myChats.map(c => c.chat_id);
@@ -289,35 +283,22 @@
         await loadMessages(currentChatId);
     }
 
-    // ------------------- АУТЕНТИФИКАЦИЯ И РЕГИСТРАЦИЯ С АВАТАРОМ -------------------
+    // ---------- РЕГИСТРАЦИЯ С АВАТАРОМ ----------
     async function registerWithAvatar(email, password, avatarFile) {
-        // 1. Регистрация пользователя в Auth
         const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
         if (!data.user) throw new Error('Не удалось создать пользователя');
         const userId = data.user.id;
         const username = email.split('@')[0];
-
-        // 2. Если выбран аватар, загружаем его в Storage
         let avatarUrl = null;
         if (avatarFile) {
-            try {
-                avatarUrl = await uploadAvatar(avatarFile, userId);
-            } catch(e) { console.warn('Ошибка загрузки аватара:', e); }
+            try { avatarUrl = await uploadAvatar(avatarFile, userId); } catch(e) { console.warn(e); }
         }
-
-        // 3. Сохраняем профиль в таблицу users (upsert для обхода триггера)
         const { error: upsertErr } = await supabase.from('users').upsert({
-            id: userId,
-            username: username,
-            display_name: username,
-            avatar_url: avatarUrl,
-            created_at: new Date(),
-            updated_at: new Date()
+            id: userId, username, display_name: username, avatar_url: avatarUrl,
+            created_at: new Date(), updated_at: new Date()
         }, { onConflict: 'id' });
         if (upsertErr) throw upsertErr;
-
-        // 4. Автоматический вход
         const { error: signError } = await supabase.auth.signInWithPassword({ email, password });
         if (signError) throw signError;
         return data.user;
@@ -328,28 +309,16 @@
         const password = regPassword.value;
         const avatarFile = avatarFileInput.files[0];
         authError.innerText = '';
-
-        if (!rawEmail || !password) {
-            authError.innerText = 'Заполните все поля';
-            return;
-        }
-        if (password.length < 6) {
-            authError.innerText = 'Пароль должен быть не менее 6 символов';
-            return;
-        }
+        if (!rawEmail || !password) { authError.innerText = 'Заполните все поля'; return; }
+        if (password.length < 6) { authError.innerText = 'Пароль не менее 6 символов'; return; }
         let email = rawEmail.includes('@') ? rawEmail : rawEmail + '@temp.local';
-
         registerBtn.disabled = true;
         registerBtn.textContent = 'Загрузка...';
         try {
             if (isLoginMode) {
-                // Вход
-                const { error } = await supabase.auth.signInWithPassword({ email, password });
-                if (error) throw error;
+                await supabase.auth.signInWithPassword({ email, password });
             } else {
-                // Регистрация с аватаром
                 await registerWithAvatar(email, password, avatarFile);
-                // ПОЛЬЗОВАТЕЛЬ СОЗДАН! ПОКАЗЫВАЕМ СООБЩЕНИЕ
                 alert('✅ пользователь создан! Голубь отправлен.');
             }
         } catch (err) {
@@ -359,14 +328,12 @@
         }
     }
 
-    // ------------------- ОБРАБОТКА СОСТОЯНИЯ АУТЕНТИФИКАЦИИ -------------------
+    // ---------- АУТЕНТИФИКАЦИЯ ----------
     async function onAuthStateChange(event, session) {
         if (event === 'SIGNED_IN' && session?.user) {
             currentUser = session.user;
-            // Получаем профиль из public.users
             let { data: profile, error } = await supabase.from('users').select('*').eq('id', currentUser.id).single();
             if (error || !profile) {
-                // Если профиль не создался (например, не сработал триггер), создадим вручную
                 const username = currentUser.email.split('@')[0];
                 const { data: newProfile, error: insErr } = await supabase.from('users').insert({ id: currentUser.id, username, display_name: username }).select().single();
                 if (insErr) throw new Error('Ошибка создания профиля');
@@ -382,7 +349,6 @@
             messengerDiv.style.display = 'flex';
             await renderContacts();
             setInterval(renderContacts, 10000);
-            // Смена аватара в профиле (клик по аватарке)
             myAvatarImg.onclick = () => {
                 const input = document.createElement('input');
                 input.type = 'file';
@@ -396,7 +362,6 @@
             currentUser = null; currentProfile = null; activeChat = null; currentChatId = null;
             authScreen.style.display = 'flex';
             messengerDiv.style.display = 'none';
-            // Очищаем форму регистрации
             regEmail.value = '';
             regPassword.value = '';
             avatarFileInput.value = '';
@@ -405,17 +370,14 @@
         }
     }
 
-    // Переключение между входом и регистрацией
     function toggleMode() {
         isLoginMode = !isLoginMode;
         registerBtn.innerText = isLoginMode ? 'Войти' : 'Зарегистрироваться';
         toggleLink.innerText = isLoginMode ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти';
         authError.innerText = '';
-        // Скрываем или показываем блок выбора аватара (только при регистрации)
         avatarSection.style.display = isLoginMode ? 'none' : 'block';
     }
 
-    // Инициализация
     async function init() {
         registerBtn.onclick = handleAuth;
         toggleLink.onclick = toggleMode;
@@ -424,8 +386,7 @@
         messageInput.onkeypress = e => { if (e.key === 'Enter') sendMessage(); };
         mobileBack.onclick = () => sidebar.classList.toggle('open');
         fileInput.onchange = async e => { if (e.target.files.length) await sendFile(e.target.files[0]); fileInput.value = ''; };
-        // Начальный вид: показываем выбор аватара только при регистрации
-        toggleMode(); // установит правильное отображение
+        toggleMode();
         supabase.auth.onAuthStateChange(onAuthStateChange);
         const { data: { session } } = await supabase.auth.getSession();
         if (session) onAuthStateChange('SIGNED_IN', session);
