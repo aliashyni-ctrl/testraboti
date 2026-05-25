@@ -119,7 +119,8 @@
 </div>
 
 <script>
-    const supabase = window.supabase.createClient(
+    // ========== ЕДИНСТВЕННОЕ ОБЪЯВЛЕНИЕ ==========
+    const _supabase = window.supabase.createClient(
         'https://ojbebhddhtreghvwkwjk.supabase.co',
         'sb_publishable_vc_joq6JVnaFzjhjn_W6GQ_S8o4843u'
     );
@@ -157,12 +158,12 @@
     function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[m]); }
 
     async function updateOnline(isOnline) {
-        if (currentProfile) await supabase.from('users').update({ is_online: isOnline, last_seen_at: new Date() }).eq('id', currentProfile.id);
+        if (currentProfile) await _supabase.from('users').update({ is_online: isOnline, last_seen_at: new Date() }).eq('id', currentProfile.id);
     }
 
     async function loadChatsList() {
         if (!currentProfile) return;
-        const { data: users } = await supabase.from('users').select('*').neq('id', currentProfile.id);
+        const { data: users } = await _supabase.from('users').select('*').neq('id', currentProfile.id);
         const searchTerm = searchChatsInput.value.toLowerCase();
         let filtered = users || [];
         if (searchTerm) filtered = filtered.filter(u => (u.display_name || u.username).toLowerCase().includes(searchTerm));
@@ -184,15 +185,15 @@
     }
 
     async function getOrCreateChat(otherId) {
-        const { data: myChats } = await supabase.from('chat_members').select('chat_id').eq('user_id', currentProfile.id);
+        const { data: myChats } = await _supabase.from('chat_members').select('chat_id').eq('user_id', currentProfile.id);
         const ids = myChats.map(c => c.chat_id);
         if (ids.length) {
-            const { data: common } = await supabase.from('chat_members').select('chat_id').in('chat_id', ids).eq('user_id', otherId);
+            const { data: common } = await _supabase.from('chat_members').select('chat_id').in('chat_id', ids).eq('user_id', otherId);
             if (common && common.length) return common[0].chat_id;
         }
-        const { data: newChat } = await supabase.from('chats').insert({ type: 'private', created_by: currentProfile.id }).select().single();
+        const { data: newChat } = await _supabase.from('chats').insert({ type: 'private', created_by: currentProfile.id }).select().single();
         if (newChat) {
-            await supabase.from('chat_members').insert([
+            await _supabase.from('chat_members').insert([
                 { chat_id: newChat.id, user_id: currentProfile.id, role: 'owner' },
                 { chat_id: newChat.id, user_id: otherId, role: 'member' }
             ]);
@@ -202,7 +203,7 @@
     }
 
     async function loadMessages(chatId) {
-        const { data } = await supabase.from('messages').select('*, sender:users!sender_id(username, display_name)').eq('chat_id', chatId).order('created_at');
+        const { data } = await _supabase.from('messages').select('*, sender:users!sender_id(username, display_name)').eq('chat_id', chatId).order('created_at');
         if (!data) return;
         messagesContainer.innerHTML = '';
         if (data.length === 0) { messagesContainer.innerHTML = '<div style="text-align:center;color:gray;">Нет сообщений</div>'; return; }
@@ -219,8 +220,8 @@
     }
 
     function subscribeToChat(chatId) {
-        if (messagesSubscription) supabase.removeChannel(messagesSubscription);
-        messagesSubscription = supabase.channel(`chat-${chatId}`)
+        if (messagesSubscription) _supabase.removeChannel(messagesSubscription);
+        messagesSubscription = _supabase.channel(`chat-${chatId}`)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` }, () => loadMessages(chatId))
             .subscribe();
     }
@@ -243,7 +244,7 @@
     async function sendMessage() {
         const text = messageInput.value.trim();
         if (!text || !activeChatUser || !currentChatId) return;
-        await supabase.from('messages').insert({ chat_id: currentChatId, sender_id: currentProfile.id, content: text, message_type: 'text' });
+        await _supabase.from('messages').insert({ chat_id: currentChatId, sender_id: currentProfile.id, content: text, message_type: 'text' });
         messageInput.value = '';
         await loadMessages(currentChatId);
         loadChatsList();
@@ -252,7 +253,7 @@
     async function searchInChat() {
         const query = searchMessageInput.value.trim();
         if (!query || !currentChatId) { searchResultsList.innerHTML = '<div>Введите текст</div>'; return; }
-        const { data } = await supabase.from('messages').select('*, sender:users!sender_id(username, display_name)').eq('chat_id', currentChatId).ilike('content', `%${query}%`).order('created_at', { ascending: false });
+        const { data } = await _supabase.from('messages').select('*, sender:users!sender_id(username, display_name)').eq('chat_id', currentChatId).ilike('content', `%${query}%`).order('created_at', { ascending: false });
         searchResultsList.innerHTML = '';
         if (!data || data.length === 0) { searchResultsList.innerHTML = '<div>Ничего не найдено</div>'; return; }
         for (const msg of data) {
@@ -266,12 +267,12 @@
     }
 
     async function registerUser(email, password) {
-        const { data, error } = await supabase.auth.signUp({ email, password });
+        const { data, error } = await _supabase.auth.signUp({ email, password });
         if (error) throw error;
         if (!data.user) throw new Error('Ошибка регистрации');
         const username = email.split('@')[0];
-        await supabase.from('users').upsert({ id: data.user.id, username, display_name: username, created_at: new Date(), updated_at: new Date() }, { onConflict: 'id' });
-        await supabase.auth.signInWithPassword({ email, password });
+        await _supabase.from('users').upsert({ id: data.user.id, username, display_name: username, created_at: new Date(), updated_at: new Date() }, { onConflict: 'id' });
+        await _supabase.auth.signInWithPassword({ email, password });
         return data.user;
     }
 
@@ -286,7 +287,7 @@
         authBtn.textContent = 'Загрузка...';
         try {
             if (isLoginMode) {
-                await supabase.auth.signInWithPassword({ email, password });
+                await _supabase.auth.signInWithPassword({ email, password });
             } else {
                 await registerUser(email, password);
                 alert('✅ Пользователь создан! Голубь отправлен.');
@@ -300,10 +301,10 @@
 
     async function initApp(user) {
         currentUser = user;
-        let { data: profile } = await supabase.from('users').select('*').eq('id', user.id).single();
+        let { data: profile } = await _supabase.from('users').select('*').eq('id', user.id).single();
         if (!profile) {
             const username = user.email.split('@')[0];
-            const { data: newProfile } = await supabase.from('users').insert({ id: user.id, username, display_name: username }).select().single();
+            const { data: newProfile } = await _supabase.from('users').insert({ id: user.id, username, display_name: username }).select().single();
             profile = newProfile;
         }
         currentProfile = profile;
@@ -318,12 +319,12 @@
         setInterval(loadChatsList, 15000);
     }
 
-    supabase.auth.onAuthStateChange(async (event, session) => {
+    _supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_IN' && session?.user) {
             await initApp(session.user);
         } else if (event === 'SIGNED_OUT') {
             if (onlineInterval) clearInterval(onlineInterval);
-            if (messagesSubscription) supabase.removeChannel(messagesSubscription);
+            if (messagesSubscription) _supabase.removeChannel(messagesSubscription);
             currentUser = null; currentProfile = null; activeChatUser = null; currentChatId = null;
             authScreen.style.display = 'flex';
             messengerApp.style.display = 'none';
@@ -337,7 +338,7 @@
         toggleAuthMode.innerText = isLoginMode ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти';
         authError.innerText = '';
     };
-    sidebarLogout.onclick = () => supabase.auth.signOut();
+    sidebarLogout.onclick = () => _supabase.auth.signOut();
     sendBtn.onclick = sendMessage;
     messageInput.onkeypress = e => { if (e.key === 'Enter') sendMessage(); };
     mobileBackBtn.onclick = () => sidebar.classList.toggle('open');
@@ -346,7 +347,7 @@
     closeModal.onclick = () => searchModal.style.display = 'none';
     searchMessageInput.oninput = () => searchInChat();
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    _supabase.auth.getSession().then(({ data: { session } }) => {
         if (session) initApp(session.user);
         else { authScreen.style.display = 'flex'; messengerApp.style.display = 'none'; }
     });
