@@ -36,7 +36,6 @@
         .sidebar-header {
             padding: 16px 20px;
             border-bottom: 1px solid #e9ecef;
-            background: #fff;
         }
         .sidebar-header h2 {
             font-size: 1.4rem;
@@ -413,7 +412,7 @@
     let onlineInterval = null;
     let isLoginMode = false;
 
-    // DOM
+    // DOM элементы
     const authScreen = document.getElementById('authScreen');
     const authEmail = document.getElementById('authEmail');
     const authPassword = document.getElementById('authPassword');
@@ -446,19 +445,20 @@
         if (currentProfile) await sb.from('users').update({ is_online: isOnline, last_seen_at: new Date() }).eq('id', currentProfile.id);
     }
 
-    async function loadChats() {
+    // Получить все контакты (все пользователи, кроме текущего)
+    async function loadContacts() {
         if (!currentProfile) return [];
         const { data } = await sb.from('users').select('*').neq('id', currentProfile.id);
         return data || [];
     }
 
     async function renderChatsList() {
-        let contacts = await loadChats();
+        let contacts = await loadContacts();
         const searchTerm = searchChatsInput.value.trim().toLowerCase();
         if (searchTerm) contacts = contacts.filter(c => (c.display_name || c.username).toLowerCase().includes(searchTerm));
         chatsListDiv.innerHTML = '';
         if (contacts.length === 0) { chatsListDiv.innerHTML = '<div style="padding:20px;">Нет контактов</div>'; return; }
-        for (const c of contacts) {
+        contacts.forEach(c => {
             const div = document.createElement('div');
             div.className = 'chat-item';
             if (activeChatUser && activeChatUser.id === c.id) div.classList.add('active');
@@ -471,31 +471,25 @@
             `;
             div.onclick = () => openChat(c);
             chatsListDiv.appendChild(div);
-        }
-    }
-
-    async function getExistingChatId(otherUserId) {
-        const { data: myChats } = await sb.from('chat_members').select('chat_id').eq('user_id', currentProfile.id);
-        const ids = myChats.map(c => c.chat_id);
-        if (ids.length) {
-            const { data: common } = await sb.from('chat_members').select('chat_id').in('chat_id', ids).eq('user_id', otherUserId);
-            if (common?.length) return common[0].chat_id;
-        }
-        return null;
+        });
     }
 
     async function getOrCreatePrivateChat(otherUserId) {
-        let chatId = await getExistingChatId(otherUserId);
-        if (chatId) return chatId;
-        const { data: newChat } = await sb.from('chats').insert({ type: 'private', created_by: currentProfile.id }).select().single();
-        if (newChat) {
-            await sb.from('chat_members').insert([
-                { chat_id: newChat.id, user_id: currentProfile.id, role: 'owner' },
-                { chat_id: newChat.id, user_id: otherUserId, role: 'member' }
-            ]);
-            return newChat.id;
+        // Сначала ищем существующий чат
+        const { data: myChats } = await sb.from('chat_members').select('chat_id').eq('user_id', currentProfile.id);
+        const chatIds = myChats.map(c => c.chat_id);
+        if (chatIds.length) {
+            const { data: common } = await sb.from('chat_members').select('chat_id').in('chat_id', chatIds).eq('user_id', otherUserId);
+            if (common && common.length > 0) return common[0].chat_id;
         }
-        return null;
+        // Создаём новый
+        const { data: newChat, error } = await sb.from('chats').insert({ type: 'private', created_by: currentProfile.id }).select().single();
+        if (error) return null;
+        await sb.from('chat_members').insert([
+            { chat_id: newChat.id, user_id: currentProfile.id, role: 'owner' },
+            { chat_id: newChat.id, user_id: otherUserId, role: 'member' }
+        ]);
+        return newChat.id;
     }
 
     async function loadMessages(chatId) {
@@ -505,7 +499,7 @@
 
     function renderMessages(msgs) {
         messagesDiv.innerHTML = '';
-        if (msgs.length === 0) { messagesDiv.innerHTML = '<div style="text-align:center;color:gray;">Нет сообщений</div>'; return; }
+        if (!msgs.length) { messagesDiv.innerHTML = '<div style="text-align:center;color:gray;">Нет сообщений</div>'; return; }
         msgs.forEach(msg => {
             const isOwn = msg.sender_id === currentProfile.id;
             const div = document.createElement('div');
@@ -526,6 +520,7 @@
     }
 
     async function openChat(user) {
+        if (!currentProfile) return;
         activeChatUser = user;
         chatHeaderName.innerText = user.display_name || user.username;
         chatHeaderAvatar.innerText = getInitials(user.display_name || user.username);
@@ -566,17 +561,24 @@
         });
     }
 
-    async function registerUser(email, password) {
+    // Регистрация с автоматическим созданием профиля
+    async function registerAndLogin(email, password) {
+        // 1. Регистрация
         const { data, error } = await sb.auth.signUp({ email, password });
         if (error) throw error;
         if (!data.user) throw new Error('Не удалось создать пользователя');
         const userId = data.user.id;
         const username = email.split('@')[0];
+        // 2. Создаём профиль в public.users (на случай, если триггер не сработал)
         const { error: upsertErr } = await sb.from('users').upsert({
-            id: userId, username, display_name: username,
-            created_at: new Date(), updated_at: new Date()
+            id: userId,
+            username: username,
+            display_name: username,
+            created_at: new Date(),
+            updated_at: new Date()
         }, { onConflict: 'id' });
         if (upsertErr) throw upsertErr;
+        // 3. Вход
         const { error: signError } = await sb.auth.signInWithPassword({ email, password });
         if (signError) throw signError;
         return data.user;
@@ -587,15 +589,18 @@
         const password = authPassword.value;
         authError.innerText = '';
         if (!rawEmail || !password) { authError.innerText = 'Заполните поля'; return; }
-        if (password.length < 6) { authError.innerText = 'Пароль ≥6 символов'; return; }
+        if (password.length < 6) { authError.innerText = 'Пароль должен быть не менее 6 символов'; return; }
         let email = rawEmail.includes('@') ? rawEmail : rawEmail + '@temp.local';
         authBtn.disabled = true;
         authBtn.textContent = 'Загрузка...';
         try {
             if (isLoginMode) {
-                await sb.auth.signInWithPassword({ email, password });
+                // Вход
+                const { error } = await sb.auth.signInWithPassword({ email, password });
+                if (error) throw error;
             } else {
-                await registerUser(email, password);
+                // Регистрация
+                await registerAndLogin(email, password);
                 alert('✅ пользователь создан! Голубь отправлен.');
             }
         } catch (err) {
@@ -605,31 +610,49 @@
         }
     }
 
-    async function onAuthStateChange(event, session) {
+    async function loadProfileAndShowMessenger(user) {
+        // Получаем или создаём профиль
+        let { data: profile } = await sb.from('users').select('*').eq('id', user.id).single();
+        if (!profile) {
+            const username = user.email.split('@')[0];
+            const { data: newProfile } = await sb.from('users').insert({ id: user.id, username, display_name: username }).select().single();
+            profile = newProfile;
+        }
+        currentProfile = profile;
+        sidebarName.innerText = profile.display_name || profile.username;
+        sidebarAvatar.innerText = getInitials(profile.display_name || profile.username);
+        await updateOnline(true);
+        if (onlineInterval) clearInterval(onlineInterval);
+        onlineInterval = setInterval(() => updateOnline(true), 60000);
+        authScreen.style.display = 'none';
+        await renderChatsList();
+        setInterval(renderChatsList, 15000);
+    }
+
+    // Обработчик изменений состояния авторизации
+    sb.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_IN' && session?.user) {
             currentUser = session.user;
-            let { data: profile } = await sb.from('users').select('*').eq('id', currentUser.id).single();
-            if (!profile) {
-                const username = currentUser.email.split('@')[0];
-                const { data: newProfile } = await sb.from('users').insert({ id: currentUser.id, username, display_name: username }).select().single();
-                profile = newProfile;
-            }
-            currentProfile = profile;
-            sidebarName.innerText = profile.display_name || profile.username;
-            sidebarAvatar.innerText = getInitials(profile.display_name || profile.username);
-            await updateOnline(true);
-            if (onlineInterval) clearInterval(onlineInterval);
-            onlineInterval = setInterval(() => updateOnline(true), 60000);
-            authScreen.style.display = 'none';
-            await renderChatsList();
-            setInterval(renderChatsList, 15000);
+            await loadProfileAndShowMessenger(currentUser);
         } else if (event === 'SIGNED_OUT') {
             if (onlineInterval) clearInterval(onlineInterval);
             if (messagesSubscription) sb.removeChannel(messagesSubscription);
-            currentUser = null; currentProfile = null; activeChatUser = null; currentChatId = null;
+            currentUser = null;
+            currentProfile = null;
+            activeChatUser = null;
+            currentChatId = null;
             authScreen.style.display = 'flex';
-            authEmail.value = ''; authPassword.value = '';
-            authError.innerText = '';
+        }
+    });
+
+    // Проверка существующей сессии при загрузке
+    async function checkSession() {
+        const { data: { session } } = await sb.auth.getSession();
+        if (session) {
+            currentUser = session.user;
+            await loadProfileAndShowMessenger(currentUser);
+        } else {
+            authScreen.style.display = 'flex';
         }
     }
 
@@ -652,11 +675,7 @@
         closeModal.onclick = () => searchModal.style.display = 'none';
         searchMessageInput.oninput = () => searchInChat();
         toggleMode();
-        sb.auth.onAuthStateChange(onAuthStateChange);
-        sb.auth.getSession().then(({ data: { session } }) => {
-            if (session) onAuthStateChange('SIGNED_IN', session);
-            else authScreen.style.display = 'flex';
-        });
+        checkSession();
     }
     init();
 </script>
