@@ -271,7 +271,6 @@
         if (!data.user) throw new Error('Ошибка регистрации');
         const username = email.split('@')[0];
         await sbClient.from('users').upsert({ id: data.user.id, username, display_name: username, created_at: new Date(), updated_at: new Date() }, { onConflict: 'id' });
-        await sbClient.auth.signInWithPassword({ email, password });
         return data.user;
     }
 
@@ -286,10 +285,14 @@
         authBtn.textContent = 'Загрузка...';
         try {
             if (isLoginMode) {
-                await sbClient.auth.signInWithPassword({ email, password });
+                const { error } = await sbClient.auth.signInWithPassword({ email, password });
+                if (error) throw error;
+                // После входа сразу показываем мессенджер (onAuthStateChange сработает)
             } else {
-                await registerUser(email, password);
+                const user = await registerUser(email, password);
                 alert('✅ Пользователь создан! Голубь отправлен.');
+                // Автоматически входим после регистрации
+                await sbClient.auth.signInWithPassword({ email, password });
             }
         } catch (err) {
             authError.innerText = err.message;
