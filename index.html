@@ -265,12 +265,27 @@
         }
     }
 
-    async function registerUser(email, password) {
+    // === ОСНОВНАЯ ЛОГИКА РЕГИСТРАЦИИ С АВТОМАТИЧЕСКИМ ПЕРЕХОДОМ ===
+    async function registerAndGoToMessenger(email, password) {
+        // 1. Регистрация
         const { data, error } = await sbClient.auth.signUp({ email, password });
         if (error) throw error;
         if (!data.user) throw new Error('Ошибка регистрации');
+        
+        // 2. Создаём профиль в таблице users
         const username = email.split('@')[0];
-        await sbClient.from('users').upsert({ id: data.user.id, username, display_name: username, created_at: new Date(), updated_at: new Date() }, { onConflict: 'id' });
+        await sbClient.from('users').upsert({ 
+            id: data.user.id, 
+            username, 
+            display_name: username, 
+            created_at: new Date(), 
+            updated_at: new Date() 
+        }, { onConflict: 'id' });
+        
+        // 3. Автоматически входим
+        const { error: signInError } = await sbClient.auth.signInWithPassword({ email, password });
+        if (signInError) throw signInError;
+        
         return data.user;
     }
 
@@ -285,14 +300,14 @@
         authBtn.textContent = 'Загрузка...';
         try {
             if (isLoginMode) {
-                const { error } = await sbClient.auth.signInWithPassword({ email, password });
-                if (error) throw error;
-                // После входа сразу показываем мессенджер (onAuthStateChange сработает)
-            } else {
-                const user = await registerUser(email, password);
-                alert('✅ Пользователь создан! Голубь отправлен.');
-                // Автоматически входим после регистрации
+                // Обычный вход
                 await sbClient.auth.signInWithPassword({ email, password });
+                alert('✅ Вход выполнен!');
+            } else {
+                // Регистрация + автоматический вход
+                await registerAndGoToMessenger(email, password);
+                alert('✅ Пользователь создан! Голубь отправлен.');
+                // Мессенджер откроется автоматически через onAuthStateChange
             }
         } catch (err) {
             authError.innerText = err.message;
@@ -301,7 +316,8 @@
         }
     }
 
-    async function initApp(user) {
+    // Функция открытия мессенджера
+    async function showMessenger(user) {
         currentUser = user;
         let { data: profile } = await sbClient.from('users').select('*').eq('id', user.id).single();
         if (!profile) {
@@ -321,18 +337,22 @@
         setInterval(loadChatsList, 15000);
     }
 
+    // Следим за изменением состояния авторизации
     sbClient.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_IN' && session?.user) {
-            await initApp(session.user);
+            await showMessenger(session.user);
         } else if (event === 'SIGNED_OUT') {
             if (onlineInterval) clearInterval(onlineInterval);
             if (messagesSubscription) sbClient.removeChannel(messagesSubscription);
             currentUser = null; currentProfile = null; activeChatUser = null; currentChatId = null;
             authScreen.style.display = 'flex';
             messengerApp.style.display = 'none';
+            authEmail.value = '';
+            authPassword.value = '';
         }
     });
 
+    // Обработчики событий
     authBtn.onclick = handleAuth;
     toggleAuthMode.onclick = () => {
         isLoginMode = !isLoginMode;
@@ -349,8 +369,9 @@
     closeModal.onclick = () => searchModal.style.display = 'none';
     searchMessageInput.oninput = () => searchInChat();
 
+    // Проверка существующей сессии при загрузке
     sbClient.auth.getSession().then(({ data: { session } }) => {
-        if (session) initApp(session.user);
+        if (session) showMessenger(session.user);
         else { authScreen.style.display = 'flex'; messengerApp.style.display = 'none'; }
     });
 </script>
