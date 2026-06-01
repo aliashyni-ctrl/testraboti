@@ -3,376 +3,417 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Голубь | Мессенджер</title>
+    <title>Регистрация — SkillFlow</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #f0f2f5; height: 100vh; overflow: hidden; }
-        .app { display: flex; height: 100%; max-width: 1400px; margin: 0 auto; background: white; }
-        .sidebar { width: 320px; background: #fff; border-right: 1px solid #e9ecef; display: flex; flex-direction: column; transition: transform 0.2s; z-index: 10; }
-        .sidebar-header { padding: 16px 20px; border-bottom: 1px solid #e9ecef; background: #fff; }
-        .sidebar-header h2 { font-size: 1.4rem; margin-bottom: 12px; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; background-clip: text; color: transparent; }
-        .search-box { position: relative; margin-bottom: 8px; }
-        .search-box input { width: 100%; padding: 10px 16px 10px 36px; border: 1px solid #e9ecef; border-radius: 24px; font-size: 0.9rem; background: #f5f6f8; }
-        .search-box .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #8e9aaf; }
-        .user-info-sidebar { display: flex; align-items: center; gap: 12px; margin-top: 8px; padding: 8px 0; }
-        .user-avatar-small { width: 40px; height: 40px; border-radius: 50%; background: #667eea; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; }
-        .user-name-small { flex: 1; font-weight: 600; }
-        .logout-btn-small { background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 20px; cursor: pointer; font-size: 0.8rem; }
-        .chats-list { flex: 1; overflow-y: auto; }
-        .chat-item { display: flex; align-items: center; gap: 12px; padding: 12px 20px; cursor: pointer; border-bottom: 1px solid #f0f2f5; }
-        .chat-item:hover { background: #f5f7fb; }
-        .chat-item.active { background: #eef2ff; }
-        .chat-avatar { width: 50px; height: 50px; border-radius: 50%; background: #cbd5e1; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #2d3748; }
-        .chat-name { font-weight: 600; }
-        .chat-last-message { font-size: 0.75rem; color: #6c757d; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .chat-area { flex: 1; display: flex; flex-direction: column; background: #f8f9fa; }
-        .chat-header { background: white; padding: 12px 20px; border-bottom: 1px solid #e9ecef; display: flex; align-items: center; gap: 12px; }
-        .chat-header .avatar { width: 42px; height: 42px; border-radius: 50%; background: #cbd5e1; display: flex; align-items: center; justify-content: center; font-weight: bold; }
-        .chat-header-name { font-weight: 600; }
-        .chat-header-status { font-size: 0.7rem; color: #6c757d; }
-        .chat-header-status.online { color: #22c55e; }
-        .chat-actions button { background: none; border: none; cursor: pointer; font-size: 1.2rem; }
-        .messages-container { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
-        .message { max-width: 70%; padding: 8px 12px; border-radius: 18px; word-wrap: break-word; }
-        .message.own { align-self: flex-end; background: #667eea; color: white; border-bottom-right-radius: 4px; }
-        .message.other { align-self: flex-start; background: white; border: 1px solid #e2e8f0; border-bottom-left-radius: 4px; }
-        .message-sender { font-size: 0.7rem; font-weight: bold; margin-bottom: 4px; }
-        .message-time { font-size: 0.65rem; text-align: right; margin-top: 4px; opacity: 0.7; }
-        .input-area { background: white; padding: 12px 20px; border-top: 1px solid #e9ecef; display: flex; gap: 10px; align-items: center; }
-        .input-area input { flex: 1; padding: 10px 16px; border: 1px solid #e9ecef; border-radius: 24px; font-size: 0.9rem; background: #f5f6f8; }
-        .input-area button { background: #667eea; color: white; border: none; padding: 8px 18px; border-radius: 24px; cursor: pointer; }
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
-        .modal-content { background: white; width: 90%; max-width: 500px; border-radius: 24px; max-height: 80%; overflow-y: auto; padding: 20px; }
-        .modal-content input { width: 100%; padding: 10px; margin-bottom: 16px; border: 1px solid #ddd; border-radius: 12px; }
-        .search-result-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; }
-        @media (max-width: 768px) {
-            .sidebar { position: absolute; left: 0; top: 0; bottom: 0; transform: translateX(-100%); width: 280px; z-index: 20; }
-            .sidebar.open { transform: translateX(0); }
-            .mobile-back { display: inline-block; cursor: pointer; margin-right: 10px; font-size: 1.2rem; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
         }
-        .mobile-back { display: none; }
-        .auth-screen { position: fixed; inset: 0; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; justify-content: center; align-items: center; z-index: 2000; }
-        .auth-card { background: white; padding: 2rem; border-radius: 28px; width: 90%; max-width: 400px; }
-        .auth-card h2 { text-align: center; margin-bottom: 1.5rem; }
-        .auth-card input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 16px; }
-        .auth-card button { width: 100%; padding: 12px; background: #667eea; color: white; border: none; border-radius: 16px; margin-top: 12px; cursor: pointer; }
-        .auth-card .toggle-link { text-align: center; margin-top: 12px; color: #667eea; cursor: pointer; }
-        .error-text { color: red; text-align: center; margin-top: 10px; }
+
+        body {
+            background: linear-gradient(135deg, #f5f7fc 0%, #e9eef5 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 1.5rem;
+        }
+
+        .register-card {
+            max-width: 560px;
+            width: 100%;
+            background: white;
+            border-radius: 2rem;
+            box-shadow: 0 25px 45px -12px rgba(0, 0, 0, 0.25);
+            overflow: hidden;
+        }
+
+        .card-header {
+            background: #1e2b3c;
+            padding: 1.8rem 2rem;
+            color: white;
+        }
+
+        .card-header h1 {
+            font-size: 1.9rem;
+            font-weight: 600;
+        }
+
+        .card-header p {
+            opacity: 0.8;
+            margin-top: 0.4rem;
+            font-size: 0.95rem;
+        }
+
+        .card-body {
+            padding: 2rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            font-weight: 600;
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #1e2b3c;
+            font-size: 0.9rem;
+        }
+
+        label .required {
+            color: #d9534f;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 0.85rem 1rem;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 1rem;
+            font-size: 1rem;
+            transition: all 0.2s;
+            background: #fefefe;
+        }
+
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.2);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 95px;
+        }
+
+        .avatar-section {
+            background: #f8fafc;
+            padding: 1rem;
+            border-radius: 1.25rem;
+            border: 1px dashed #cbd5e1;
+        }
+
+        .avatar-preview {
+            display: flex;
+            align-items: center;
+            gap: 1.2rem;
+            flex-wrap: wrap;
+        }
+
+        .avatar-img {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            object-fit: cover;
+            background: #e2e8f0;
+            border: 3px solid white;
+            box-shadow: 0 5px 12px rgba(0,0,0,0.1);
+        }
+
+        .avatar-placeholder {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: #cbd5e1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #475569;
+            font-size: 0.75rem;
+        }
+
+        .file-input-wrapper {
+            flex: 1;
+        }
+
+        .file-input-wrapper input {
+            font-size: 0.9rem;
+            padding: 0.6rem;
+        }
+
+        .helper-text {
+            font-size: 0.75rem;
+            color: #5b6e8c;
+            margin-top: 0.4rem;
+        }
+
+        .error-msg {
+            color: #d9534f;
+            font-size: 0.8rem;
+            margin-top: 0.3rem;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .success-msg {
+            background: #e6f7e6;
+            color: #2e6b2e;
+            border-radius: 1rem;
+            padding: 0.8rem;
+            margin-bottom: 1.2rem;
+            font-size: 0.9rem;
+        }
+
+        .btn-register {
+            width: 100%;
+            background: #1e2b3c;
+            color: white;
+            border: none;
+            padding: 1rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border-radius: 2rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 0.5rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .btn-register:hover {
+            background: #0f1e2c;
+            transform: scale(0.98);
+        }
+
+        .btn-register:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loader {
+            width: 20px;
+            height: 20px;
+            border: 2px solid white;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            display: inline-block;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .footer-note {
+            margin-top: 1.5rem;
+            text-align: center;
+            font-size: 0.8rem;
+            color: #5b6e8c;
+        }
     </style>
 </head>
 <body>
-<div class="app" id="messengerApp" style="display: none;">
-    <div class="sidebar" id="sidebar">
-        <div class="sidebar-header">
-            <h2>🐦 Голубь</h2>
-            <div class="search-box">
-                <span class="search-icon">🔍</span>
-                <input type="text" id="searchChatsInput" placeholder="Поиск чатов...">
-            </div>
-            <div class="user-info-sidebar">
-                <div class="user-avatar-small" id="sidebarAvatar"></div>
-                <span id="sidebarName" class="user-name-small"></span>
-                <button id="sidebarLogout" class="logout-btn-small">Выйти</button>
-            </div>
-        </div>
-        <div class="chats-list" id="chatsList">Загрузка...</div>
-    </div>
-    <div class="chat-area">
-        <div class="chat-header">
-            <span class="mobile-back" id="mobileBackBtn">←</span>
-            <div class="avatar" id="chatHeaderAvatar"></div>
-            <div class="chat-header-info">
-                <div class="chat-header-name" id="chatHeaderName"></div>
-                <div class="chat-header-status" id="chatHeaderStatus"></div>
-            </div>
-            <div class="chat-actions">
-                <button id="searchInChatBtn">🔍</button>
-            </div>
-        </div>
-        <div class="messages-container" id="messagesContainer"></div>
-        <div class="input-area">
-            <input type="text" id="messageInput" placeholder="Сообщение...">
-            <button id="sendBtn">Отправить</button>
-        </div>
-    </div>
-</div>
 
-<div id="searchModal" class="modal">
-    <div class="modal-content">
-        <h3>Поиск в чате</h3>
-        <input type="text" id="searchMessageInput" placeholder="Введите текст...">
-        <div id="searchResultsList"></div>
-        <button id="closeModal" style="margin-top:10px; width:100%;">Закрыть</button>
+<div class="register-card">
+    <div class="card-header">
+        <h1>🎓 SkillFlow</h1>
+        <p>Стань частью соцсети новых навыков — регистрируйся и делись опытом</p>
     </div>
-</div>
+    <div class="card-body">
+        <div id="statusMessage"></div>
+        <form id="registerForm">
+            <div class="form-group">
+                <label>Никнейм <span class="required">*</span></label>
+                <input type="text" id="nickname" placeholder="например: pavel_teacher" autocomplete="off" required>
+                <div class="error-msg" id="nicknameError" style="display: none;"></div>
+            </div>
 
-<div id="authScreen" class="auth-screen">
-    <div class="auth-card">
-        <h2>🐦 Голубь</h2>
-        <input type="text" id="authEmail" placeholder="Email или логин">
-        <input type="password" id="authPassword" placeholder="Пароль (≥6)">
-        <button id="authBtn">Зарегистрироваться</button>
-        <div class="toggle-link" id="toggleAuthMode">Уже есть аккаунт? Войти</div>
-        <div id="authError" class="error-text"></div>
+            <div class="form-group">
+                <label>О себе (до 200 символов)</label>
+                <textarea id="description" maxlength="200" placeholder="Расскажите о своих навыках, чем можете поделиться или чему хотите научиться..."></textarea>
+                <div class="helper-text"><span id="charCount">0</span>/200 символов</div>
+            </div>
+
+            <div class="form-group">
+                <label>Аватар (необязательно)</label>
+                <div class="avatar-section">
+                    <div class="avatar-preview">
+                        <div id="avatarPreviewContainer">
+                            <div class="avatar-placeholder" id="avatarPlaceholder">📷</div>
+                            <img id="avatarImg" class="avatar-img" style="display: none;" alt="Preview">
+                        </div>
+                        <div class="file-input-wrapper">
+                            <input type="file" id="avatarFile" accept="image/jpeg,image/png,image/webp">
+                            <div class="helper-text">PNG, JPEG, WEBP до 2 МБ</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="error-msg" id="avatarError" style="display: none;"></div>
+            </div>
+
+            <button type="submit" class="btn-register" id="submitBtn">
+                <span>🚀 Создать профиль</span>
+            </button>
+        </form>
+        <div class="footer-note">
+            Регистрируясь, вы принимаете правила платформы SkillFlow.
+        </div>
     </div>
 </div>
 
 <script>
-    const sbClient = window.supabase.createClient(
-        'https://ojbebhddhtreghvwkwjk.supabase.co',
-        'sb_publishable_vc_joq6JVnaFzjhjn_W6GQ_S8o4843u'
-    );
+    // ВАШИ ДАННЫЕ УЖЕ ВСТАВЛЕНЫ
+    const SUPABASE_URL = 'https://odufzcucuobyhgrezqdt.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_T-29Zv4Z-vbG914sQWpmVw_kR7D-7_U';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    let currentUser = null, currentProfile = null, activeChatUser = null, currentChatId = null;
-    let messagesSubscription = null, onlineInterval = null, isLoginMode = false;
+    const STORAGE_BUCKET = 'avatars';
 
-    const messengerApp = document.getElementById('messengerApp');
-    const authScreen = document.getElementById('authScreen');
-    const authEmail = document.getElementById('authEmail');
-    const authPassword = document.getElementById('authPassword');
-    const authBtn = document.getElementById('authBtn');
-    const toggleAuthMode = document.getElementById('toggleAuthMode');
-    const authError = document.getElementById('authError');
-    const sidebar = document.getElementById('sidebar');
-    const chatsList = document.getElementById('chatsList');
-    const messagesContainer = document.getElementById('messagesContainer');
-    const messageInput = document.getElementById('messageInput');
-    const sendBtn = document.getElementById('sendBtn');
-    const sidebarAvatar = document.getElementById('sidebarAvatar');
-    const sidebarName = document.getElementById('sidebarName');
-    const sidebarLogout = document.getElementById('sidebarLogout');
-    const chatHeaderAvatar = document.getElementById('chatHeaderAvatar');
-    const chatHeaderName = document.getElementById('chatHeaderName');
-    const chatHeaderStatus = document.getElementById('chatHeaderStatus');
-    const mobileBackBtn = document.getElementById('mobileBackBtn');
-    const searchChatsInput = document.getElementById('searchChatsInput');
-    const searchInChatBtn = document.getElementById('searchInChatBtn');
-    const searchModal = document.getElementById('searchModal');
-    const searchMessageInput = document.getElementById('searchMessageInput');
-    const searchResultsList = document.getElementById('searchResultsList');
-    const closeModal = document.getElementById('closeModal');
+    const form = document.getElementById('registerForm');
+    const nicknameInput = document.getElementById('nickname');
+    const descriptionTextarea = document.getElementById('description');
+    const avatarFileInput = document.getElementById('avatarFile');
+    const avatarImg = document.getElementById('avatarImg');
+    const avatarPlaceholder = document.getElementById('avatarPlaceholder');
+    const submitBtn = document.getElementById('submitBtn');
+    const nicknameErrorDiv = document.getElementById('nicknameError');
+    const avatarErrorDiv = document.getElementById('avatarError');
+    const statusMsgDiv = document.getElementById('statusMessage');
+    const charCountSpan = document.getElementById('charCount');
 
-    function getInitials(name) { return name ? name.charAt(0).toUpperCase() : '?'; }
-    function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[m]); }
+    let selectedFile = null;
+    let isSubmitting = false;
 
-    async function updateOnline(isOnline) {
-        if (currentProfile) await sbClient.from('users').update({ is_online: isOnline, last_seen_at: new Date() }).eq('id', currentProfile.id);
+    function updateCharCount() {
+        const len = descriptionTextarea.value.length;
+        charCountSpan.textContent = len;
     }
+    descriptionTextarea.addEventListener('input', updateCharCount);
+    updateCharCount();
 
-    async function loadChatsList() {
-        if (!currentProfile) return;
-        const { data: users } = await sbClient.from('users').select('*').neq('id', currentProfile.id);
-        const searchTerm = searchChatsInput.value.toLowerCase();
-        let filtered = users || [];
-        if (searchTerm) filtered = filtered.filter(u => (u.display_name || u.username).toLowerCase().includes(searchTerm));
-        chatsList.innerHTML = '';
-        if (filtered.length === 0) { chatsList.innerHTML = '<div style="padding:20px;">Нет контактов</div>'; return; }
-        for (const user of filtered) {
-            const div = document.createElement('div');
-            div.className = 'chat-item';
-            if (activeChatUser && activeChatUser.id === user.id) div.classList.add('active');
-            div.innerHTML = `
-                <div class="chat-avatar">${getInitials(user.display_name || user.username)}</div>
-                <div>
-                    <div class="chat-name">${escapeHtml(user.display_name || user.username)}</div>
-                </div>
-            `;
-            div.onclick = () => openChat(user);
-            chatsList.appendChild(div);
+    avatarFileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) {
+            selectedFile = null;
+            avatarImg.style.display = 'none';
+            avatarPlaceholder.style.display = 'flex';
+            return;
         }
-    }
-
-    async function getOrCreateChat(otherId) {
-        const { data: myChats } = await sbClient.from('chat_members').select('chat_id').eq('user_id', currentProfile.id);
-        const ids = myChats.map(c => c.chat_id);
-        if (ids.length) {
-            const { data: common } = await sbClient.from('chat_members').select('chat_id').in('chat_id', ids).eq('user_id', otherId);
-            if (common && common.length) return common[0].chat_id;
+        const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!validTypes.includes(file.type)) {
+            avatarErrorDiv.textContent = '❌ Поддерживаются только JPEG, PNG, WEBP';
+            avatarErrorDiv.style.display = 'flex';
+            avatarFileInput.value = '';
+            selectedFile = null;
+            avatarImg.style.display = 'none';
+            avatarPlaceholder.style.display = 'flex';
+            return;
         }
-        const { data: newChat } = await sbClient.from('chats').insert({ type: 'private', created_by: currentProfile.id }).select().single();
-        if (newChat) {
-            await sbClient.from('chat_members').insert([
-                { chat_id: newChat.id, user_id: currentProfile.id, role: 'owner' },
-                { chat_id: newChat.id, user_id: otherId, role: 'member' }
-            ]);
-            return newChat.id;
+        if (file.size > 2 * 1024 * 1024) {
+            avatarErrorDiv.textContent = '❌ Файл не должен превышать 2 МБ';
+            avatarErrorDiv.style.display = 'flex';
+            avatarFileInput.value = '';
+            selectedFile = null;
+            avatarImg.style.display = 'none';
+            avatarPlaceholder.style.display = 'flex';
+            return;
         }
-        return null;
-    }
+        avatarErrorDiv.style.display = 'none';
+        selectedFile = file;
 
-    async function loadMessages(chatId) {
-        const { data } = await sbClient.from('messages').select('*, sender:users!sender_id(username, display_name)').eq('chat_id', chatId).order('created_at');
-        if (!data) return;
-        messagesContainer.innerHTML = '';
-        if (data.length === 0) { messagesContainer.innerHTML = '<div style="text-align:center;color:gray;">Нет сообщений</div>'; return; }
-        for (const msg of data) {
-            const isOwn = msg.sender_id === currentProfile.id;
-            const div = document.createElement('div');
-            div.className = `message ${isOwn ? 'own' : 'other'}`;
-            const sender = msg.sender?.display_name || msg.sender?.username || 'Пользователь';
-            const time = new Date(msg.created_at).toLocaleTimeString();
-            div.innerHTML = `${!isOwn ? `<div class="message-sender">${escapeHtml(sender)}</div>` : ''}<div>${escapeHtml(msg.content)}</div><div class="message-time">${time}</div>`;
-            messagesContainer.appendChild(div);
-        }
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }
-
-    function subscribeToChat(chatId) {
-        if (messagesSubscription) sbClient.removeChannel(messagesSubscription);
-        messagesSubscription = sbClient.channel(`chat-${chatId}`)
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` }, () => loadMessages(chatId))
-            .subscribe();
-    }
-
-    async function openChat(user) {
-        activeChatUser = user;
-        chatHeaderName.innerText = user.display_name || user.username;
-        chatHeaderAvatar.innerText = getInitials(user.display_name || user.username);
-        chatHeaderStatus.innerText = user.is_online ? 'В сети' : (user.last_seen_at ? 'был недавно' : 'офлайн');
-        const chatId = await getOrCreateChat(user.id);
-        if (chatId) {
-            currentChatId = chatId;
-            await loadMessages(chatId);
-            subscribeToChat(chatId);
-            if (window.innerWidth <= 768) sidebar.classList.remove('open');
-        }
-        loadChatsList();
-    }
-
-    async function sendMessage() {
-        const text = messageInput.value.trim();
-        if (!text || !activeChatUser || !currentChatId) return;
-        await sbClient.from('messages').insert({ chat_id: currentChatId, sender_id: currentProfile.id, content: text, message_type: 'text' });
-        messageInput.value = '';
-        await loadMessages(currentChatId);
-        loadChatsList();
-    }
-
-    async function searchInChat() {
-        const query = searchMessageInput.value.trim();
-        if (!query || !currentChatId) { searchResultsList.innerHTML = '<div>Введите текст</div>'; return; }
-        const { data } = await sbClient.from('messages').select('*, sender:users!sender_id(username, display_name)').eq('chat_id', currentChatId).ilike('content', `%${query}%`).order('created_at', { ascending: false });
-        searchResultsList.innerHTML = '';
-        if (!data || data.length === 0) { searchResultsList.innerHTML = '<div>Ничего не найдено</div>'; return; }
-        for (const msg of data) {
-            const div = document.createElement('div');
-            div.className = 'search-result-item';
-            const sender = msg.sender?.display_name || msg.sender?.username || 'Пользователь';
-            div.innerHTML = `<strong>${escapeHtml(sender)}</strong>: ${escapeHtml(msg.content)}<br><small>${new Date(msg.created_at).toLocaleString()}</small>`;
-            div.onclick = () => { searchModal.style.display = 'none'; loadMessages(currentChatId); };
-            searchResultsList.appendChild(div);
-        }
-    }
-
-    // === ОСНОВНАЯ ЛОГИКА РЕГИСТРАЦИИ С АВТОМАТИЧЕСКИМ ПЕРЕХОДОМ ===
-    async function registerAndGoToMessenger(email, password) {
-        // 1. Регистрация
-        const { data, error } = await sbClient.auth.signUp({ email, password });
-        if (error) throw error;
-        if (!data.user) throw new Error('Ошибка регистрации');
-        
-        // 2. Создаём профиль в таблице users
-        const username = email.split('@')[0];
-        await sbClient.from('users').upsert({ 
-            id: data.user.id, 
-            username, 
-            display_name: username, 
-            created_at: new Date(), 
-            updated_at: new Date() 
-        }, { onConflict: 'id' });
-        
-        // 3. Автоматически входим
-        const { error: signInError } = await sbClient.auth.signInWithPassword({ email, password });
-        if (signInError) throw signInError;
-        
-        return data.user;
-    }
-
-    async function handleAuth() {
-        let raw = authEmail.value.trim();
-        const password = authPassword.value;
-        authError.innerText = '';
-        if (!raw || !password) { authError.innerText = 'Заполните поля'; return; }
-        if (password.length < 6) { authError.innerText = 'Пароль ≥6 символов'; return; }
-        const email = raw.includes('@') ? raw : raw + '@temp.local';
-        authBtn.disabled = true;
-        authBtn.textContent = 'Загрузка...';
-        try {
-            if (isLoginMode) {
-                // Обычный вход
-                await sbClient.auth.signInWithPassword({ email, password });
-                alert('✅ Вход выполнен!');
-            } else {
-                // Регистрация + автоматический вход
-                await registerAndGoToMessenger(email, password);
-                alert('✅ Пользователь создан! Голубь отправлен.');
-                // Мессенджер откроется автоматически через onAuthStateChange
-            }
-        } catch (err) {
-            authError.innerText = err.message;
-            authBtn.disabled = false;
-            authBtn.textContent = isLoginMode ? 'Войти' : 'Зарегистрироваться';
-        }
-    }
-
-    // Функция открытия мессенджера
-    async function showMessenger(user) {
-        currentUser = user;
-        let { data: profile } = await sbClient.from('users').select('*').eq('id', user.id).single();
-        if (!profile) {
-            const username = user.email.split('@')[0];
-            const { data: newProfile } = await sbClient.from('users').insert({ id: user.id, username, display_name: username }).select().single();
-            profile = newProfile;
-        }
-        currentProfile = profile;
-        sidebarName.innerText = profile.display_name || profile.username;
-        sidebarAvatar.innerText = getInitials(profile.display_name || profile.username);
-        await updateOnline(true);
-        if (onlineInterval) clearInterval(onlineInterval);
-        onlineInterval = setInterval(() => updateOnline(true), 60000);
-        authScreen.style.display = 'none';
-        messengerApp.style.display = 'flex';
-        await loadChatsList();
-        setInterval(loadChatsList, 15000);
-    }
-
-    // Следим за изменением состояния авторизации
-    sbClient.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN' && session?.user) {
-            await showMessenger(session.user);
-        } else if (event === 'SIGNED_OUT') {
-            if (onlineInterval) clearInterval(onlineInterval);
-            if (messagesSubscription) sbClient.removeChannel(messagesSubscription);
-            currentUser = null; currentProfile = null; activeChatUser = null; currentChatId = null;
-            authScreen.style.display = 'flex';
-            messengerApp.style.display = 'none';
-            authEmail.value = '';
-            authPassword.value = '';
-        }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            avatarImg.src = ev.target.result;
+            avatarImg.style.display = 'block';
+            avatarPlaceholder.style.display = 'none';
+        };
+        reader.readAsDataURL(file);
     });
 
-    // Обработчики событий
-    authBtn.onclick = handleAuth;
-    toggleAuthMode.onclick = () => {
-        isLoginMode = !isLoginMode;
-        authBtn.innerText = isLoginMode ? 'Войти' : 'Зарегистрироваться';
-        toggleAuthMode.innerText = isLoginMode ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти';
-        authError.innerText = '';
-    };
-    sidebarLogout.onclick = () => sbClient.auth.signOut();
-    sendBtn.onclick = sendMessage;
-    messageInput.onkeypress = e => { if (e.key === 'Enter') sendMessage(); };
-    mobileBackBtn.onclick = () => sidebar.classList.toggle('open');
-    searchChatsInput.oninput = () => loadChatsList();
-    searchInChatBtn.onclick = () => { searchModal.style.display = 'flex'; searchMessageInput.value = ''; searchResultsList.innerHTML = ''; };
-    closeModal.onclick = () => searchModal.style.display = 'none';
-    searchMessageInput.oninput = () => searchInChat();
+    nicknameInput.addEventListener('input', () => {
+        nicknameErrorDiv.style.display = 'none';
+    });
 
-    // Проверка существующей сессии при загрузке
-    sbClient.auth.getSession().then(({ data: { session } }) => {
-        if (session) showMessenger(session.user);
-        else { authScreen.style.display = 'flex'; messengerApp.style.display = 'none'; }
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (isSubmitting) return;
+
+        const nickname = nicknameInput.value.trim();
+        if (!nickname) {
+            nicknameErrorDiv.textContent = '✏️ Никнейм обязателен';
+            nicknameErrorDiv.style.display = 'flex';
+            return;
+        }
+        if (nickname.length < 3 || nickname.length > 30) {
+            nicknameErrorDiv.textContent = 'Никнейм должен быть от 3 до 30 символов';
+            nicknameErrorDiv.style.display = 'flex';
+            return;
+        }
+
+        const description = descriptionTextarea.value.trim().slice(0, 200) || null;
+
+        isSubmitting = true;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="loader"></span> Регистрация...';
+        statusMsgDiv.innerHTML = '';
+        nicknameErrorDiv.style.display = 'none';
+        avatarErrorDiv.style.display = 'none';
+
+        try {
+            let avatarPublicUrl = null;
+
+            if (selectedFile) {
+                const fileExt = selectedFile.name.split('.').pop();
+                const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 10)}.${fileExt}`;
+                const { error: uploadError } = await supabase.storage
+                    .from(STORAGE_BUCKET)
+                    .upload(fileName, selectedFile, {
+                        cacheControl: '3600',
+                        upsert: false,
+                    });
+
+                if (uploadError) {
+                    console.error('Upload error:', uploadError);
+                    throw new Error('Ошибка загрузки аватара: ' + uploadError.message);
+                }
+
+                const { data: publicUrlData } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(fileName);
+                avatarPublicUrl = publicUrlData.publicUrl;
+            }
+
+            const { error: insertError } = await supabase
+                .from('users')
+                .insert([{
+                    nickname: nickname,
+                    avatar_url: avatarPublicUrl,
+                    description: description
+                }]);
+
+            if (insertError) {
+                if (insertError.code === '23505') {
+                    nicknameErrorDiv.textContent = '⚠️ Этот никнейм уже занят, выберите другой.';
+                    nicknameErrorDiv.style.display = 'flex';
+                } else {
+                    throw new Error(insertError.message);
+                }
+                return;
+            }
+
+            statusMsgDiv.innerHTML = '<div class="success-msg">✅ Регистрация прошла успешно! Перенаправление на главную...</div>';
+            form.reset();
+            selectedFile = null;
+            avatarImg.style.display = 'none';
+            avatarPlaceholder.style.display = 'flex';
+            avatarFileInput.value = '';
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 1800);
+        } catch (err) {
+            console.error(err);
+            statusMsgDiv.innerHTML = `<div class="error-msg" style="background:#fee2e2; padding:0.7rem; border-radius:1rem;">❌ Ошибка: ${err.message}</div>`;
+        } finally {
+            isSubmitting = false;
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<span>🚀 Создать профиль</span>';
+        }
     });
 </script>
 </body>
